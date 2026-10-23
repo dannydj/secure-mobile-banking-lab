@@ -28,17 +28,17 @@ A status indicates evidence for a particular control, not a certification of the
 
 A successful mocked test cannot justify `DEVICE_VERIFIED`.
 
-All V1 controls start as `PLANNED`.
+All V1 controls were initially classified as `PLANNED`. Their status is updated only when implementation and verification evidence is available.
 
 ## 3. Security Control Register
 
 | ID | Security Control | Threats | MASVS Group | Status |
 | --- | --- | --- | --- | --- |
 | CTRL-001 | Centralized simulated authentication | T-01 | MASVS-AUTH | PLANNED |
-| CTRL-002 | Protected access based on effective session state | T-02 | MASVS-AUTH | PLANNED |
-| CTRL-003 | Absolute session expiration | T-03, T-09 | MASVS-AUTH | PLANNED |
-| CTRL-004 | Stale biometric result rejection | T-04 | MASVS-AUTH | PLANNED |
-| CTRL-005 | Safe session restoration and metadata validation | T-05 | MASVS-AUTH, MASVS-STORAGE | PLANNED |
+| CTRL-002 | Protected access based on effective session state | T-02 | MASVS-AUTH | SIMULATED |
+| CTRL-003 | Absolute session expiration | T-03, T-09 | MASVS-AUTH | SIMULATED |
+| CTRL-004 | Stale biometric result rejection | T-04 | MASVS-AUTH | SIMULATED |
+| CTRL-005 | Safe session restoration and metadata validation | T-05 | MASVS-AUTH, MASVS-STORAGE | SIMULATED |
 | CTRL-006 | Background locking and content obscuring | T-06 | MASVS-AUTH, MASVS-PLATFORM | PLANNED |
 | CTRL-007 | Privacy-aware display and screen protection | T-07 | MASVS-PLATFORM, MASVS-PRIVACY | PLANNED |
 | CTRL-008 | Protected storage and error handling | T-08 | MASVS-STORAGE | PLANNED |
@@ -49,6 +49,46 @@ All V1 controls start as `PLANNED`.
 | CTRL-013 | Synthetic data and repository hygiene | T-13 | MASVS-STORAGE, MASVS-PRIVACY | PLANNED |
 
 MASVS mappings indicate relevant security topics, not complete satisfaction of individual MASVS requirements.
+
+### 3.1 Domain Implementation Evidence — Issue #5
+
+**Verification date:** 2026-10-23
+
+The session state machine has been implemented as a deterministic TypeScript domain model.
+
+Implementation:
+
+- `src/domain/session/session.types.ts`
+- `src/domain/session/session-events.ts`
+- `src/domain/session/session-policy.ts`
+- `src/domain/session/session-machine.ts`
+
+Automated verification:
+
+- `__tests__/session/session-policy.test.ts`
+- `__tests__/session/session-machine.test.ts`
+
+The local Jest execution completed successfully with 31 passing tests across three test suites, including two existing HomeScreen smoke tests.
+
+| Control | Verified Domain Behavior | Relevant Scenarios |
+| --- | --- | --- |
+| CTRL-002 | Protected access is denied for non-active, invalid, inactive, or internally inconsistent sessions. | SESSION-010, SESSION-015, SESSION-017 |
+| CTRL-003 | Absolute expiration takes precedence over reauthentication and can explicitly invalidate an existing session. | SESSION-008, SESSION-009, SESSION-011, SESSION-019 |
+| CTRL-004 | Stale, cancelled, superseded, or invalidated reauthentication results cannot restore session access. | SESSION-009, SESSION-013, SESSION-016 |
+| CTRL-005 | Simulated restart resets authenticated state; inconsistent session metadata is rejected. | SESSION-014, SESSION-015, SESSION-017 |
+
+**Verification environment:** Local Jest and TypeScript execution using synthetic data and deterministic timestamps.
+
+**Implementation limitations:**
+
+- Session and reauthentication identifiers use deterministic counters for demonstration and are not cryptographic authentication tokens.
+- Counter uniqueness is limited to the lifetime of the session-machine instance.
+- Restart behavior is simulated; no persistent storage adapter is integrated.
+- Biometric outcomes are simulated events, not native biometric verification.
+- No backend authentication, server-side authorization, or native device security enforcement has been verified.
+- CTRL-001 remains PLANNED until a simulated identity adapter is integrated.
+
+These results support the SIMULATED status of the applicable domain controls. They do not justify DEVICE_VERIFIED status or OWASP MASVS compliance claims.
 
 ## 4. Authentication and Session Controls
 

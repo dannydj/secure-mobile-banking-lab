@@ -1,4 +1,3 @@
-
 # Secure Mobile Banking Lab
 
 **A React Native security reference project focused on authentication, session lifecycle protection, secure storage, biometric reauthentication, and privacy-aware mobile interfaces.**
@@ -23,10 +22,16 @@ Completed foundations:
 - Jest and React Native Testing Library.
 - Two passing component smoke tests.
 - GitHub Actions quality workflow configuration.
+- Deterministic TypeScript session state machine.
+- Explicit session states, transition guards, and access policy.
+- Simulated session expiration and reauthentication handling.
+- Security-focused domain tests covering expiration, invalid states, and stale authentication results.
 
-The workflow must still be verified through a GitHub pull request.
+The GitHub Actions workflow was successfully verified on PR #4 and main. Subsequent implementation changes must pass CI on their respective pull requests.
 
-Authentication, session protection, biometrics, secure storage, and other mobile security controls are not yet implemented.
+The domain-level session protection logic is implemented and tested using simulated events and synthetic data.
+
+Credential verification, native lifecycle integration, biometrics, secure storage, and operating-system security enforcement remain pending.
 
 Track development through [GitHub Issues](https://github.com/dannydj/secure-mobile-banking-lab/issues).
 
@@ -159,8 +164,6 @@ The proposed V1 technology baseline includes:
 - Jest and jest-expo
 - React Native Testing Library
 - GitHub Actions
-
-Exact dependency versions and setup instructions will be added during application initialization.
 
 ## Security Engineering
 
