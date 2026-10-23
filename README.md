@@ -11,13 +11,66 @@ SMBL is not a production banking application or a security-certified product.
 
 ## Project Status
 
-**Current phase: V1 architecture and security design**
+**Current phase: V1 application bootstrap**
 
-The project is being developed incrementally through GitHub issues, pull requests, automated tests, and versioned releases.
+The initial Expo and React Native application is operational in a web development environment.
 
-The V1 application has not yet been implemented. Security controls described in the design documentation are planned unless explicitly identified as implemented or verified.
+Completed foundations:
 
-Track development progress through [GitHub Issues](https://github.com/dannydj/secure-mobile-banking-lab/issues).
+- Expo SDK 58 with React Native and TypeScript.
+- Basic Expo Router navigation and starter screen.
+- ESLint and TypeScript validation.
+- Jest and React Native Testing Library.
+- Two passing component smoke tests.
+- GitHub Actions quality workflow configuration.
+
+The workflow must still be verified through a GitHub pull request.
+
+Authentication, session protection, biometrics, secure storage, and other mobile security controls are not yet implemented.
+
+Track development through [GitHub Issues](https://github.com/dannydj/secure-mobile-banking-lab/issues).
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 22.23.4 (see `.nvmrc`).
+- npm 10 or a compatible npm version.
+- A supported web or mobile development environment.
+
+### Installation
+
+```bash
+nvm use
+npm ci
+```
+
+### Run the Application
+
+```bash
+npm run web
+```
+
+The web version displays the initial project screen. Web execution does not verify native mobile security capabilities.
+
+### Quality Checks
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npx expo install --check
+```
+
+GitHub Actions is configured to execute the same checks on pull requests targeting `main` and on pushes to `main`.
+
+### Platform Verification
+
+Native Android and iOS security behavior has not yet been verified.
+
+Biometrics, protected storage, background privacy controls, and other native integrations will be implemented and evaluated in later issues.
+
+Expo SDK 58 may require development builds rather than the currently available Expo Go application on some physical devices.
 
 ## Problem Statement
 
@@ -129,6 +182,24 @@ Security design is informed by relevant OWASP Mobile Application Security Verifi
 - MASVS-PRIVACY
 
 This alignment does not imply formal MASVS compliance, independent assessment, or certification.
+
+## Known Dependency Security Advisory
+
+**Review date:** 2026-10-23
+
+The initial Expo SDK 58 dependency tree includes `node-forge@1.4.0` through `@expo/cli` and `@expo/code-signing-certificates`.
+
+The npm audit reports four high-severity findings associated with this dependency chain.
+
+- Advisory: [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv)
+- Affected dependency: `node-forge@1.4.0`
+- Status: Unresolved; no patched version listed in the advisory at the review date.
+- Mitigation approach: Do not process real credentials or production signing material in this educational project. Monitor upstream fixes and reassess dependency updates.
+- Limitation: This mitigation does not remove the vulnerable dependency or demonstrate that the vulnerable code is unreachable.
+
+Forced dependency downgrades are not applied because they may break compatibility with the selected Expo SDK.
+
+This advisory will be reassessed before the V1 release.
 
 ## Security Documentation
 
