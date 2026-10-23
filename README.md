@@ -10,7 +10,7 @@ SMBL is not a production banking application or a security-certified product.
 
 ## Project Status
 
-**Current phase: V1 application bootstrap**
+**Current phase: V1 simulated session lifecycle integration**
 
 The initial Expo and React Native application is operational in a web development environment.
 
@@ -26,12 +26,17 @@ Completed foundations:
 - Explicit session states, transition guards, and access policy.
 - Simulated session expiration and reauthentication handling.
 - Security-focused domain tests covering expiration, invalid states, and stale authentication results.
+- Application-level session coordinator with injectable clock.
+- React Native AppState adapter with conservative foreground handling.
+- Automatic inactivity and absolute-expiration scheduling.
+- Synthetic protected-content rendering governed by session authorization.
+- Automated integration tests and manual Expo web lifecycle verification.
 
 The GitHub Actions workflow was successfully verified on PR #4 and main. Subsequent implementation changes must pass CI on their respective pull requests.
 
 The domain-level session protection logic is implemented and tested using simulated events and synthetic data.
 
-Credential verification, native lifecycle integration, biometrics, secure storage, and operating-system security enforcement remain pending.
+Credential verification, native device lifecycle verification, biometrics, secure storage, and operating-system security enforcement remain pending.
 
 Track development through [GitHub Issues](https://github.com/dannydj/secure-mobile-banking-lab/issues).
 
@@ -56,7 +61,7 @@ npm ci
 npm run web
 ```
 
-The web version displays the initial project screen. Web execution does not verify native mobile security capabilities.
+The web version demonstrates simulated login, protected synthetic content, locking, inactivity expiration, and logout. Web execution does not verify native mobile security capabilities.
 
 ### Quality Checks
 
@@ -186,23 +191,43 @@ Security design is informed by relevant OWASP Mobile Application Security Verifi
 
 This alignment does not imply formal MASVS compliance, independent assessment, or certification.
 
-## Known Dependency Security Advisory
+## Known Dependency Security Advisories
 
 **Review date:** 2026-10-23
 
-The initial Expo SDK 58 dependency tree includes `node-forge@1.4.0` through `@expo/cli` and `@expo/code-signing-certificates`.
+After updating Expo SDK 58 dependencies, both `npm audit` and `npm audit --omit=dev` reported five high-severity findings in the dependency graph.
 
-The npm audit reports four high-severity findings associated with this dependency chain.
+### Affected Dependencies
 
-- Advisory: [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv)
-- Affected dependency: `node-forge@1.4.0`
-- Status: Unresolved; no patched version listed in the advisory at the review date.
-- Mitigation approach: Do not process real credentials or production signing material in this educational project. Monitor upstream fixes and reassess dependency updates.
-- Limitation: This mitigation does not remove the vulnerable dependency or demonstrate that the vulnerable code is unreachable.
+| Dependency | Advisory | Status |
+| --- | --- | --- |
+| `node-forge` | [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) | Unresolved; no patched version published |
+| `zod` | [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) | Patched upstream in version 4.6.6; compatible transitive update pending |
 
-Forced dependency downgrades are not applied because they may break compatibility with the selected Expo SDK.
+`node-forge@1.4.0` is introduced through `expo` and `@expo/cli`, both directly and through `@expo/code-signing-certificates`.
 
-This advisory will be reassessed before the V1 release.
+`zod@3.25.76` is introduced through `@expo/cli` and separately through `eslint-config-expo` and `eslint-plugin-react-hooks`.
+
+Dependency audit findings do not independently establish that vulnerable code paths are reachable in the mobile application.
+
+The audit count includes findings propagated through dependency relationships and does not establish five independently exploitable application vulnerabilities.
+
+### Risk Assessment
+
+- The project is an educational demonstration using synthetic data.
+- No production credentials, customer information, or production signing material are used.
+- The application does not intentionally implement cryptographic signature verification through node-forge.
+- Reachability of vulnerable upstream code paths has not been fully assessed.
+- The reported findings remain unresolved in the installed dependency graph.
+- `npm audit fix --force` proposes an incompatible Expo downgrade and is not an approved mitigation.
+
+Avoiding sensitive production data reduces potential exposure but does not eliminate the vulnerabilities.
+
+### Follow-up
+
+Dependency remediation and risk reassessment are tracked in [Issue #8](https://github.com/dannydj/secure-mobile-banking-lab/issues/8).
+
+The findings must be reassessed before any production use or claim of release readiness.
 
 ## Security Documentation
 

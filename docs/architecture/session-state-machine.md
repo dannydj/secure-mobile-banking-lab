@@ -1,7 +1,7 @@
 
 # Secure Mobile Banking Lab — V1 Session State Machine
 
-- **Status:** Domain implementation simulated; native integration pending
+- **Status:** Domain and application lifecycle integration simulated; native device verification pending
 - **Implementation issue:** #5
 - **Tracking issue:** #1
 - **Related document:** [Architecture Overview](overview.md)
@@ -273,7 +273,7 @@ Local validation completed with 31 passing tests across three Jest suites, inclu
 This implementation is limited to deterministic application logic.
 
 - Native biometric authentication is not integrated.
-- React Native AppState events are not connected to the state machine.
+- React Native AppState is integrated through an application adapter, but native Android and iOS lifecycle behavior has not been verified on physical devices.
 - Session state is not persisted or restored from secure storage.
 - Simulated login does not verify credentials through an identity adapter.
 - Session and reauthentication identifiers are deterministic, predictable, and not suitable as production authentication tokens.
@@ -282,6 +282,18 @@ This implementation is limited to deterministic application logic.
 - No server-side session validation or authorization is performed.
 
 The domain tests support simulated control verification only. Native platform behavior requires separate implementation and testing.
+
+### Application Integration — Issue #7
+
+The session coordinator connects the deterministic domain model with application events and a controllable clock.
+
+React Native AppState changes and session deadlines are handled through separate infrastructure adapters.
+
+The interface derives protected-content visibility from `canAccessSession`, rather than relying solely on the displayed session status.
+
+Verification includes automated integration tests and manual Expo web testing.
+
+The application integration remains simulated and does not establish device-level security guarantees.
 
 ## 14. Security Limitations
 

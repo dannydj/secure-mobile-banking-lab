@@ -39,10 +39,10 @@ All V1 controls were initially classified as `PLANNED`. Their status is updated 
 | CTRL-003 | Absolute session expiration | T-03, T-09 | MASVS-AUTH | SIMULATED |
 | CTRL-004 | Stale biometric result rejection | T-04 | MASVS-AUTH | SIMULATED |
 | CTRL-005 | Safe session restoration and metadata validation | T-05 | MASVS-AUTH, MASVS-STORAGE | SIMULATED |
-| CTRL-006 | Background locking and content obscuring | T-06 | MASVS-AUTH, MASVS-PLATFORM | PLANNED |
+| CTRL-006 | Background locking and content obscuring | T-06 | MASVS-AUTH, MASVS-PLATFORM | SIMULATED |
 | CTRL-007 | Privacy-aware display and screen protection | T-07 | MASVS-PLATFORM, MASVS-PRIVACY | PLANNED |
 | CTRL-008 | Protected storage and error handling | T-08 | MASVS-STORAGE | PLANNED |
-| CTRL-009 | Deterministic inactivity and lifecycle policy | T-09 | MASVS-AUTH | PLANNED |
+| CTRL-009 | Deterministic inactivity and lifecycle policy | T-09 | MASVS-AUTH | SIMULATED |
 | CTRL-010 | Isolation of simulated device trust signals | T-10 | MASVS-AUTH | PLANNED |
 | CTRL-011 | Minimal security event recording | T-11 | MASVS-STORAGE | PLANNED |
 | CTRL-012 | Safe biometric failures and recovery | T-12 | MASVS-AUTH | PLANNED |
@@ -89,6 +89,54 @@ The local Jest execution completed successfully with 31 passing tests across thr
 - CTRL-001 remains PLANNED until a simulated identity adapter is integrated.
 
 These results support the SIMULATED status of the applicable domain controls. They do not justify DEVICE_VERIFIED status or OWASP MASVS compliance claims.
+
+### 3.2 Application Lifecycle Evidence — Issue #7
+
+**Verification date:** 2026-10-23
+
+The domain session state machine is integrated with a simulated application lifecycle and a React Native user interface.
+
+Implementation:
+
+- `src/application/session/session-coordinator.ts`
+- `src/infrastructure/session/app-state-adapter.ts`
+- `src/infrastructure/session/session-deadline-adapter.ts`
+- `src/app/index.tsx`
+
+Automated verification:
+
+- `__tests__/session/session-coordinator.test.ts`
+- `__tests__/session/app-state-adapter.test.ts`
+- `__tests__/session/session-deadline-adapter.test.ts`
+- `__tests__/session/session-demo.test.tsx`
+
+Local validation: 47 passing tests across seven Jest suites.
+
+| Control | Verified Behavior | Evidence |
+| --- | --- | --- |
+| CTRL-002 | Protected synthetic content is rendered only when session access is authorized. | UI integration tests |
+| CTRL-003 | Absolute expiration invalidates access, including after delayed lifecycle events. | Deadline adapter tests |
+| CTRL-006 | Background transitions lock the session and hide protected synthetic content. | AppState and UI integration tests |
+| CTRL-009 | Inactivity deadlines are scheduled and lifecycle events cannot automatically unlock the session. | Deadline and lifecycle tests |
+
+Manual browser verification:
+
+- Environment: local Expo web development application in Chrome.
+- Simulated login displayed protected synthetic content while ACTIVE.
+- Manual locking hid protected content.
+- Switching browser tabs and returning did not automatically unlock the session.
+- Inactivity caused the session to lock.
+- Logout restored SIGNED_OUT and hid protected content.
+
+**Limitations:**
+
+- Browser observations are not equivalent to native Android or iOS device verification.
+- Background timer execution may be delayed or suspended.
+- Native operating-system previews and screenshot protection have not been verified.
+- No production authentication, native biometric adapter, or secure storage integration is implemented.
+- CTRL-006 and CTRL-009 are SIMULATED, not DEVICE_VERIFIED.
+
+The implementation provides educational evidence of session lifecycle handling without claiming full OWASP MASVS compliance.
 
 ## 4. Authentication and Session Controls
 
