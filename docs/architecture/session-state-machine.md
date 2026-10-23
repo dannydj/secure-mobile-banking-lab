@@ -1,7 +1,8 @@
 
 # Secure Mobile Banking Lab — V1 Session State Machine
 
-- **Status:** Proposed
+- **Status:** Domain implementation simulated; native integration pending
+- **Implementation issue:** #5
 - **Tracking issue:** #1
 - **Related document:** [Architecture Overview](overview.md)
 
@@ -242,7 +243,47 @@ The following invariants must hold:
 
 Additional tests should verify deadline boundary conditions and ordering of asynchronous events.
 
-## 13. Security Limitations
+## 13. Implementation Status — Issue #5
+
+**Verification date:** 2026-10-23
+
+The deterministic session state machine has been implemented in the TypeScript domain layer.
+
+### Implemented Behavior
+
+- Four explicit states: `SIGNED_OUT`, `ACTIVE`, `LOCKED`, and `EXPIRED`.
+- Simulated login with internally generated session identifiers.
+- Absolute session expiration and inactivity-based access restrictions.
+- Explicit locking, logout, and simulated application restart.
+- Foreground/background event handling at the domain level.
+- Simulated reauthentication with request identity validation.
+- Rejection of expired, stale, cancelled, and superseded authentication results.
+- Session metadata and internal identity consistency checks.
+- Deterministic session and reauthentication counters.
+
+### Automated Verification
+
+- `__tests__/session/session-policy.test.ts`
+- `__tests__/session/session-machine.test.ts`
+
+Local validation completed with 31 passing tests across three Jest suites, including the two existing HomeScreen tests.
+
+### Implementation Boundaries
+
+This implementation is limited to deterministic application logic.
+
+- Native biometric authentication is not integrated.
+- React Native AppState events are not connected to the state machine.
+- Session state is not persisted or restored from secure storage.
+- Simulated login does not verify credentials through an identity adapter.
+- Session and reauthentication identifiers are deterministic, predictable, and not suitable as production authentication tokens.
+- Identifier uniqueness is limited to the lifetime of the state-machine instance.
+- Reauthentication request identifiers currently follow a machine-defined sequence that the caller must supply.
+- No server-side session validation or authorization is performed.
+
+The domain tests support simulated control verification only. Native platform behavior requires separate implementation and testing.
+
+## 14. Security Limitations
 
 The state machine demonstrates local application behavior only.
 
@@ -257,7 +298,7 @@ It does not provide:
 
 Production systems require additional server-side and platform-specific security controls.
 
-## 14. Relationship to Other Documents
+## 15. Relationship to Other Documents
 
 - [Architecture Overview](overview.md)
 - [OWASP MASVS](https://mas.owasp.org/MASVS/)
