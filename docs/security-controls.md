@@ -34,7 +34,7 @@ All V1 controls were initially classified as `PLANNED`. Their status is updated 
 
 | ID | Security Control | Threats | MASVS Group | Status |
 | --- | --- | --- | --- | --- |
-| CTRL-001 | Centralized simulated authentication | T-01 | MASVS-AUTH | PLANNED |
+| CTRL-001 | Centralized simulated authentication | T-01 | MASVS-AUTH | SIMULATED |
 | CTRL-002 | Protected access based on effective session state | T-02 | MASVS-AUTH | SIMULATED |
 | CTRL-003 | Absolute session expiration | T-03, T-09 | MASVS-AUTH | SIMULATED |
 | CTRL-004 | Stale biometric result rejection | T-04 | MASVS-AUTH | SIMULATED |
@@ -86,7 +86,7 @@ The local Jest execution completed successfully with 31 passing tests across thr
 - Restart behavior is simulated; no persistent storage adapter is integrated.
 - Biometric outcomes are simulated events, not native biometric verification.
 - No backend authentication, server-side authorization, or native device security enforcement has been verified.
-- CTRL-001 remains PLANNED until a simulated identity adapter is integrated.
+- At the time of Issue #5, CTRL-001 remained PLANNED. Its subsequent simulated implementation is documented under Issue #10.
 
 These results support the SIMULATED status of the applicable domain controls. They do not justify DEVICE_VERIFIED status or OWASP MASVS compliance claims.
 
@@ -137,6 +137,51 @@ Manual browser verification:
 - CTRL-006 and CTRL-009 are SIMULATED, not DEVICE_VERIFIED.
 
 The implementation provides educational evidence of session lifecycle handling without claiming full OWASP MASVS compliance.
+
+### 3.3 Simulated Identity Integration — Issue #10
+
+**Verification date:** 2026-10-23
+
+The application integrates an explicit mock identity adapter with a guarded asynchronous login use case.
+
+Implementation:
+
+- `src/application/identity/identity.types.ts`
+- `src/application/identity/login-use-case.ts`
+- `src/infrastructure/identity/mock-identity-adapter.ts`
+- `src/app/index.tsx`
+
+Automated verification:
+
+- `__tests__/identity/mock-identity-adapter.test.ts`
+- `__tests__/identity/login-use-case.test.ts`
+- `__tests__/session/session-demo.test.tsx`
+
+Local validation: 65 passing tests across nine Jest suites.
+
+Verified behavior:
+
+- Recognized synthetic credentials can establish a simulated session.
+- Invalid credentials and malformed input cannot establish a session.
+- Adapter errors do not authorize protected content.
+- Duplicate requests do not create multiple sessions.
+- Results from obsolete login attempts are rejected after logout or background transitions.
+- Pending authentication is cancelled when the UI leaves the foreground.
+- A new login may begin after returning to the foreground.
+- Late authentication results cannot override a newer accepted session.
+- Component disposal prevents pending results from establishing access.
+
+**Limitations:**
+
+- Demo credentials are public and are not production secrets.
+- The mock adapter performs no real identity verification.
+- No backend authentication or server-side authorization is implemented.
+- Session identifiers are synthetic and deterministic.
+- The domain state machine still accepts typed LOGIN_SUCCESS events from trusted application callers; it does not independently verify identity.
+- Native Android and iOS device behavior has not been verified.
+- CTRL-001 is SIMULATED, not DEVICE_VERIFIED.
+
+These results support the simulated implementation of CTRL-001 without establishing OWASP MASVS compliance.
 
 ## 4. Authentication and Session Controls
 

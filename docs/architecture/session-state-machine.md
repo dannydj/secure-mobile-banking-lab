@@ -275,7 +275,7 @@ This implementation is limited to deterministic application logic.
 - Native biometric authentication is not integrated.
 - React Native AppState is integrated through an application adapter, but native Android and iOS lifecycle behavior has not been verified on physical devices.
 - Session state is not persisted or restored from secure storage.
-- Simulated login does not verify credentials through an identity adapter.
+- The domain state machine does not verify credentials. Issue #10 introduces an application-level mock identity adapter, which accepts only configured synthetic demonstration values. No real identity verification or backend authentication is performed.
 - Session and reauthentication identifiers are deterministic, predictable, and not suitable as production authentication tokens.
 - Identifier uniqueness is limited to the lifetime of the state-machine instance.
 - Reauthentication request identifiers currently follow a machine-defined sequence that the caller must supply.
@@ -294,6 +294,16 @@ The interface derives protected-content visibility from `canAccessSession`, rath
 Verification includes automated integration tests and manual Expo web testing.
 
 The application integration remains simulated and does not establish device-level security guarantees.
+
+### Simulated Identity Integration — Issue #10
+
+The UI delegates authentication attempts to an application-level login use case.
+
+The use case invokes an injected identity adapter and dispatches LOGIN_SUCCESS only after receiving a valid accepted result, provided the attempt remains current and the session is eligible for login.
+
+Request correlation and cancellation prevent obsolete asynchronous results from establishing sessions after lifecycle changes, logout, replacement attempts, or component disposal.
+
+The implementation uses publicly documented fictional credentials. It does not provide production authentication, cryptographic identity assurance, or server-side authorization.
 
 ## 14. Security Limitations
 

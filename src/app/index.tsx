@@ -1,19 +1,22 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
-import { Button, StyleSheet, Text, View } from 'react-native';
-
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { IdentityAdapter } from '../application/identity/identity.types';
+import { createLoginUseCase } from '../application/identity/login-use-case';
 import {
   createSessionCoordinator,
   type Clock,
   type SessionCoordinator,
 } from '../application/session/session-coordinator';
-
 import { canAccessSession } from '../domain/session/session-machine';
-
+import {
+  createMockIdentityAdapter,
+  DEMO_ACCESS_CODE,
+  DEMO_USERNAME,
+} from '../infrastructure/identity/mock-identity-adapter';
 import {
   observeAppState,
   type AppStateEventSource,
 } from '../infrastructure/session/app-state-adapter';
-
 import { observeSessionDeadlines } from '../infrastructure/session/session-deadline-adapter';
 
 const systemClock: Clock = {
@@ -24,18 +27,72 @@ type SessionDemoProps = {
   coordinator: SessionCoordinator;
   clock: Clock;
   appStateSource?: AppStateEventSource;
+  identityAdapter?: IdentityAdapter;
 };
 
 export function SessionDemo({
   coordinator,
   clock,
   appStateSource,
+  identityAdapter,
 }: SessionDemoProps) {
+  const [username, setUsername] = useState(DEMO_USERNAME);
+  const [accessCode, setAccessCode] = useState(DEMO_ACCESS_CODE);
+  const [loginFeedback, setLoginFeedback] = useState<string | null>(null);
+
+  const requestVersion = useRef(0);
+
+  const loginInFlight = useRef(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const defaultIdentityAdapter = useMemo(
+    () => createMockIdentityAdapter(),
+    []
+  );
+
+  const loginUseCase = useMemo(
+    () =>
+      createLoginUseCase(
+        identityAdapter ?? defaultIdentityAdapter,
+        coordinator
+      ),
+    [identityAdapter, defaultIdentityAdapter, coordinator]
+  );
+
+  useEffect(() => {
+    return () => {
+      requestVersion.current += 1;
+      loginUseCase.dispose();
+    };
+  }, [loginUseCase]);
+
   const machine = useSyncExternalStore(
     coordinator.subscribe,
     coordinator.getSnapshot,
     coordinator.getSnapshot
   );
+
+  useEffect(() => {
+    let wasForeground = coordinator.getSnapshot().isForeground;
+
+    const unsubscribe = coordinator.subscribe(() => {
+      const isForeground = coordinator.getSnapshot().isForeground;
+
+      if (wasForeground && !isForeground) {
+        requestVersion.current += 1;
+        loginInFlight.current = false;
+
+        loginUseCase.cancel();
+
+        setIsAuthenticating(false);
+        setLoginFeedback(null);
+      }
+
+      wasForeground = isForeground;
+    });
+
+    return unsubscribe;
+  }, [coordinator, loginUseCase]);
 
   useEffect(() => {
     const stopAppState = observeAppState(
@@ -62,6 +119,65 @@ export function SessionDemo({
   const isSignedOut =
     machine.sessionState.status === 'SIGNED_OUT' ||
     machine.sessionState.status === 'EXPIRED';
+
+  const handleLogin = async (): Promise<void> => {
+    if (loginInFlight.current) {
+      return;
+    }
+
+    loginInFlight.current = true;
+
+    const currentRequest = ++requestVersion.current;
+
+    setIsAuthenticating(true);
+    setLoginFeedback('Checking synthetic identity...');
+
+    try {
+      const result = await loginUseCase.login({
+        username,
+        accessCode,
+      });
+
+      if (currentRequest !== requestVersion.current) {
+        return;
+      }
+
+      switch (result.status) {
+        case 'AUTHENTICATED':
+          setLoginFeedback(null);
+          break;
+
+        case 'DENIED':
+          setLoginFeedback(
+            result.reason === 'INVALID_INPUT'
+              ? 'Enter the demo username and access code.'
+              : 'Synthetic identity not recognized.'
+          );
+          break;
+
+        case 'BUSY':
+          setLoginFeedback('A login attempt is already pending.');
+          break;
+
+        case 'UNAVAILABLE':
+          setLoginFeedback('Login is not available in the current state.');
+          break;
+
+        case 'CANCELLED':
+          setLoginFeedback('Login attempt cancelled.');
+          break;
+
+        case 'ERROR':
+          setLoginFeedback('Synthetic identity service unavailable.');
+          break;
+      }
+    } finally {
+      if (currentRequest === requestVersion.current) {
+        loginInFlight.current = false;
+        setIsAuthenticating(false);
+      }
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -98,13 +214,51 @@ export function SessionDemo({
 
       <View style={styles.actions}>
         {isSignedOut ? (
-          <Button
-            title="Simulate login"
-            disabled={!machine.isForeground}
-            onPress={() => {
-              coordinator.dispatch({ type: 'LOGIN_SUCCESS' });
-            }}
-          />
+          <>
+            <View style={styles.loginForm}>
+              <Text>Demo username</Text>
+
+              <TextInput
+                accessibilityLabel="Demo username"
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <Text>Demo access code</Text>
+
+              <TextInput
+                accessibilityLabel="Demo access code"
+                style={styles.input}
+                value={accessCode}
+                onChangeText={setAccessCode}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <Text style={styles.demoHint}>
+                Public demonstration values: demo-user / demo-only.
+                Never enter real credentials.
+              </Text>
+            </View>
+
+            <Button
+              title="Simulate login"
+              disabled={!machine.isForeground || isAuthenticating}
+              onPress={() => {
+                void handleLogin();
+              }}
+            />
+
+            {loginFeedback ? (
+              <Text style={styles.loginFeedback}>
+                {loginFeedback}
+              </Text>
+            ) : null}
+          </>
         ) : (
           <>
             <Button
@@ -210,5 +364,27 @@ const styles = StyleSheet.create({
     marginTop: 24,
     textAlign: 'center',
     color: '#64748B',
+  },
+  loginForm: {
+    width: '100%',
+    gap: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    color: '#0F172A',
+  },
+  demoHint: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  loginFeedback: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
   },
 });
