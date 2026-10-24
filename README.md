@@ -10,7 +10,7 @@ SMBL is not a production banking application or a security-certified product.
 
 ## Project Status
 
-**Current phase: V1 simulated session lifecycle integration**
+**Current phase: V1 simulated identity authentication and session lifecycle integration**
 
 The initial Expo and React Native application is operational in a web development environment.
 
@@ -31,12 +31,17 @@ Completed foundations:
 - Automatic inactivity and absolute-expiration scheduling.
 - Synthetic protected-content rendering governed by session authorization.
 - Automated integration tests and manual Expo web lifecycle verification.
+- Typed identity adapter contract and synthetic identity implementation.
+- Guarded asynchronous login use case with explicit acceptance, rejection, cancellation, and error outcomes.
+- UI integration without direct LOGIN_SUCCESS dispatch.
+- Concurrent request protection and stale authentication result rejection.
+- Automated tests for identity failures, lifecycle transitions, and authentication races.
 
 The GitHub Actions workflow was successfully verified on PR #4 and main. Subsequent implementation changes must pass CI on their respective pull requests.
 
 The domain-level session protection logic is implemented and tested using simulated events and synthetic data.
 
-Credential verification, native device lifecycle verification, biometrics, secure storage, and operating-system security enforcement remain pending.
+Production credential verification, backend authentication, server-side authorization, native device lifecycle verification, biometrics, secure storage, and operating-system security enforcement remain pending.
 
 Track development through [GitHub Issues](https://github.com/dannydj/secure-mobile-banking-lab/issues).
 

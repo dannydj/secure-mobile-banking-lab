@@ -1,8 +1,10 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
-
 import type { AppStateStatus } from 'react-native';
-
 import { SessionDemo } from '../../src/app/index';
+import type {
+  IdentityAdapter,
+  IdentityResult,
+} from '../../src/application/identity/identity.types';
 import { createSessionCoordinator } from '../../src/application/session/session-coordinator';
 import { INACTIVITY_TIMEOUT_MS } from '../../src/domain/session/session-policy';
 
@@ -167,5 +169,323 @@ describe('Session Demo Integration', () => {
     ).toBeTruthy();
 
     await screen.unmount();
+  });
+
+  it('CTRL-001: rejects invalid demo credentials and accepts valid ones', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+      />
+    );
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Demo access code'),
+      'incorrect-code'
+    );
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(
+      screen.getByText('Synthetic identity not recognized.')
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Protected synthetic preview')
+    ).toBeNull();
+
+    await fireEvent.changeText(
+      screen.getByLabelText('Demo access code'),
+      'demo-only'
+    );
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(screen.getByText('Session status: ACTIVE')).toBeTruthy();
+
+    expect(
+      screen.getByText('Protected synthetic preview')
+    ).toBeTruthy();
+
+    await screen.unmount();
+  });
+
+  it('CTRL-001: ignores a late login result after background and foreground', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    let resolveIdentity!: (result: IdentityResult) => void;
+
+    const identityPromise = new Promise<IdentityResult>((resolve) => {
+      resolveIdentity = resolve;
+    });
+
+    const adapter: IdentityAdapter = {
+      authenticate: () => identityPromise,
+    };
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        identityAdapter={adapter}
+      />
+    );
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(
+      screen.getByText('Checking synthetic identity...')
+    ).toBeTruthy();
+
+    await act(() => {
+      source.emit('background');
+    });
+
+    await act(() => {
+      source.emit('active');
+    });
+
+    await act(async () => {
+      resolveIdentity({
+        accepted: true,
+        subjectId: 'synthetic-subject-001',
+      });
+
+      await identityPromise;
+    });
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Protected synthetic preview')
+    ).toBeNull();
+
+    expect(coordinator.canAccess()).toBe(false);
+
+    await screen.unmount();
+  });
+
+  it('CTRL-001: keeps protected content hidden when the adapter fails', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    const adapter: IdentityAdapter = {
+      authenticate: async () => {
+        throw new Error('Synthetic service unavailable');
+      },
+    };
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        identityAdapter={adapter}
+      />
+    );
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(
+      screen.getByText('Synthetic identity service unavailable.')
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Protected synthetic preview')
+    ).toBeNull();
+
+    await screen.unmount();
+  });
+
+  it('CTRL-001: prevents authentication after the screen unmounts', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    let resolveIdentity!: (result: IdentityResult) => void;
+
+    const identityPromise = new Promise<IdentityResult>((resolve) => {
+      resolveIdentity = resolve;
+    });
+
+    const adapter: IdentityAdapter = {
+      authenticate: () => identityPromise,
+    };
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        identityAdapter={adapter}
+      />
+    );
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    await screen.unmount();
+
+    await act(async () => {
+      resolveIdentity({
+        accepted: true,
+        subjectId: 'synthetic-subject-001',
+      });
+
+      await identityPromise;
+    });
+
+    expect(coordinator.canAccess()).toBe(false);
+    expect(source.listenerCount).toBe(0);
+  });
+
+  it('CTRL-001: prevents duplicate authentication requests from the UI', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    let resolveIdentity!: (result: IdentityResult) => void;
+
+    const identityPromise = new Promise<IdentityResult>((resolve) => {
+      resolveIdentity = resolve;
+    });
+
+    const authenticate = jest.fn(() => identityPromise);
+
+    const adapter: IdentityAdapter = {
+      authenticate,
+    };
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        identityAdapter={adapter}
+      />
+    );
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveIdentity({
+        accepted: true,
+        subjectId: 'synthetic-subject-001',
+      });
+
+      await identityPromise;
+    });
+
+    expect(screen.getByText('Session status: ACTIVE')).toBeTruthy();
+
+    expect(
+      screen.getByText('Protected synthetic preview')
+    ).toBeTruthy();
+
+    expect(coordinator.getSnapshot().sessionSequence).toBe(1);
+
+    await screen.unmount();
+  });
+
+  it('CTRL-001: allows a new login after cancelling a backgrounded attempt', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    let resolveFirst!: (result: IdentityResult) => void;
+
+    const firstPromise = new Promise<IdentityResult>((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    const accepted: IdentityResult = {
+      accepted: true,
+      subjectId: 'synthetic-subject-001',
+    };
+
+    const authenticate = jest
+      .fn()
+      .mockImplementationOnce(() => firstPromise)
+      .mockResolvedValueOnce(accepted);
+
+    const adapter: IdentityAdapter = { authenticate };
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        identityAdapter={adapter}
+      />
+    );
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+
+    await act(() => {
+      source.emit('background');
+    });
+
+    await act(() => {
+      source.emit('active');
+    });
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Checking synthetic identity...')
+    ).toBeNull();
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(authenticate).toHaveBeenCalledTimes(2);
+
+    expect(
+      screen.getByText('Session status: ACTIVE')
+    ).toBeTruthy();
+
+    await act(async () => {
+      resolveFirst(accepted);
+      await firstPromise;
+    });
+
+    expect(coordinator.getSnapshot().sessionSequence).toBe(1);
+    expect(coordinator.canAccess()).toBe(true);
+
+    expect(
+      screen.getByText('Protected synthetic preview')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Login attempt cancelled.')
+    ).toBeNull();
+
+    await screen.unmount();
+
+    expect(source.listenerCount).toBe(0);
   });
 });
