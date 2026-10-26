@@ -1,4 +1,4 @@
-import { createSessionCoordinator } from '../../src/application/session/session-coordinator';
+import { createSessionCoordinator } from '../../src/use-cases/session/session-coordinator';
 
 import {
   ABSOLUTE_SESSION_LIFETIME_MS,

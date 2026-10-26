@@ -305,6 +305,20 @@ Request correlation and cancellation prevent obsolete asynchronous results from 
 
 The implementation uses publicly documented fictional credentials. It does not provide production authentication, cryptographic identity assurance, or server-side authorization.
 
+### Fail-Closed Storage Restoration — Issue #12
+
+Synthetic preference storage is isolated behind a typed application port.
+
+A versioned preference record contains an approved demonstration value, creation timestamp, and expiration timestamp. Records are validated before their contents are exposed to the UI.
+
+The restoration use case dispatches APPLICATION_RESTART before awaiting storage. This invalidates the existing session and preserves the known foreground/background state.
+
+Restored preferences are informational only. They cannot produce LOGIN_SUCCESS or restore authenticated session metadata.
+
+The React Native UI additionally hides protected synthetic content until the initial preference restoration resolves.
+
+The implementation uses an in-memory adapter and injected clocks for deterministic tests. It does not implement persistent storage, encryption, native secure-storage APIs, or automatic restoration of authenticated sessions.
+
 ## 14. Security Limitations
 
 The state machine demonstrates local application behavior only.

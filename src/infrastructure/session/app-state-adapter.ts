@@ -1,6 +1,6 @@
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { SessionCoordinator } from '../../application/session/session-coordinator';
+import type { SessionCoordinator } from '../../use-cases/session/session-coordinator';
 
 export type AppStateEventSource = Readonly<{
   currentState: string | null | undefined;

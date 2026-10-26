@@ -1,7 +1,7 @@
 import type {
   Clock,
   SessionCoordinator,
-} from '../../application/session/session-coordinator';
+} from '../../use-cases/session/session-coordinator';
 
 import {
   INACTIVITY_TIMEOUT_MS,

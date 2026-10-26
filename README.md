@@ -10,7 +10,7 @@ SMBL is not a production banking application or a security-certified product.
 
 ## Project Status
 
-**Current phase: V1 simulated identity authentication and session lifecycle integration**
+**Current phase: V1 simulated identity, session lifecycle, and fail-closed storage boundary integration**
 
 The initial Expo and React Native application is operational in a web development environment.
 
@@ -36,12 +36,24 @@ Completed foundations:
 - UI integration without direct LOGIN_SUCCESS dispatch.
 - Concurrent request protection and stale authentication result rejection.
 - Automated tests for identity failures, lifecycle transitions, and authentication races.
+- Typed storage port with an in-memory adapter and simulated read, write, and removal failures.
+- Versioned synthetic preference validation with explicit missing, invalid, expired, and error outcomes.
+- Controlled preference saving, loading, updating, and removal.
+- Simulated application restart that invalidates session access before reading stored information.
+- UI-level restoration of synthetic preferences without granting authentication or protected-content access.
+- Local verification with 100 passing Jest tests across 13 suites.
 
 The GitHub Actions workflow was successfully verified on PR #4 and main. Subsequent implementation changes must pass CI on their respective pull requests.
 
 The domain-level session protection logic is implemented and tested using simulated events and synthetic data.
 
 Production credential verification, backend authentication, server-side authorization, native device lifecycle verification, biometrics, secure storage, and operating-system security enforcement remain pending.
+
+The current storage adapter is memory-only. It does not persist data across application restarts and does not provide encryption or operating-system-backed protection.
+
+The default demo starts with no saved preference. The UI displays "Synthetic preference: unavailable" until a valid preference is supplied through an injected adapter.
+
+The storage recovery flow is simulated. It must not be interpreted as native Keychain, Keystore, or production session restoration.
 
 Track development through [GitHub Issues](https://github.com/dannydj/secure-mobile-banking-lab/issues).
 

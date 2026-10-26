@@ -1,15 +1,15 @@
 import {
   createLoginUseCase,
-} from '../../src/application/identity/login-use-case';
+} from '../../src/use-cases/identity/login-use-case';
 
 import type {
   IdentityAdapter,
   IdentityResult,
-} from '../../src/application/identity/identity.types';
+} from '../../src/use-cases/identity/identity.types';
 
 import {
   createSessionCoordinator,
-} from '../../src/application/session/session-coordinator';
+} from '../../src/use-cases/session/session-coordinator';
 
 const INPUT = {
   username: 'demo-user',

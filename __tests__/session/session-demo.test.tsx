@@ -1,12 +1,15 @@
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { AppStateStatus } from 'react-native';
 import { SessionDemo } from '../../src/app/index';
 import type {
   IdentityAdapter,
   IdentityResult,
-} from '../../src/application/identity/identity.types';
-import { createSessionCoordinator } from '../../src/application/session/session-coordinator';
+} from '../../src/use-cases/identity/identity.types';
+import { createSessionCoordinator } from '../../src/use-cases/session/session-coordinator';
+import { STORAGE_RESTORE_TIMEOUT_MS } from '../../src/use-cases/storage/restore-synthetic-preference';
+import type { ProtectedStoragePort } from '../../src/use-cases/storage/storage.types';
 import { INACTIVITY_TIMEOUT_MS } from '../../src/domain/session/session-policy';
+import { createInMemoryStorageAdapter } from '../../src/infrastructure/storage/in-memory-storage-adapter';
 
 const START_TIME = 1_000_000;
 
@@ -487,5 +490,163 @@ describe('Session Demo Integration', () => {
     await screen.unmount();
 
     expect(source.listenerCount).toBe(0);
+  });
+
+  it('CTRL-008: restores a synthetic preference without restoring session access', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+    const storage = createInMemoryStorageAdapter();
+
+    await storage.write(
+      'demo.preference.v1',
+      JSON.stringify({
+        version: 1,
+        value: 'sessions',
+        savedAt: START_TIME - 1_000,
+        expiresAt: START_TIME + 60_000,
+      })
+    );
+
+    coordinator.dispatch({ type: 'LOGIN_SUCCESS' });
+
+    expect(coordinator.canAccess()).toBe(true);
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        storageAdapter={storage}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: sessions')
+      ).toBeTruthy();
+    });
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Protected synthetic preview')
+    ).toBeNull();
+
+    expect(coordinator.canAccess()).toBe(false);
+
+    await screen.unmount();
+  });
+
+  it('CTRL-008: keeps protected content hidden when storage restoration fails', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    const storage = createInMemoryStorageAdapter({
+      failingOperations: ['read'],
+    });
+
+    coordinator.dispatch({ type: 'LOGIN_SUCCESS' });
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        storageAdapter={storage}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Protected synthetic preview')
+    ).toBeNull();
+
+    expect(coordinator.canAccess()).toBe(false);
+
+    await screen.unmount();
+  });
+
+  it('CTRL-008: blocks login until storage initialization finishes', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    const storage: ProtectedStoragePort = {
+      read: () => new Promise<string | null>(() => { }),
+      write: async () => { },
+      remove: async () => { },
+    };
+
+    const authenticate = jest.fn(async () => ({
+      accepted: true as const,
+      subjectId: 'synthetic-subject-001',
+    }));
+
+    const adapter: IdentityAdapter = {
+      authenticate,
+    };
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        identityAdapter={adapter}
+        storageAdapter={storage}
+      />
+    );
+
+    expect(
+      screen.getByText('Synthetic preference: loading')
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(authenticate).not.toHaveBeenCalled();
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText('Protected synthetic preview')
+    ).toBeNull();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(
+        STORAGE_RESTORE_TIMEOUT_MS
+      );
+    });
+
+    expect(
+      screen.getByText('Synthetic preference: unavailable')
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+
+    expect(
+      screen.getByText('Session status: ACTIVE')
+    ).toBeTruthy();
+
+    expect(
+      screen.getByText('Protected synthetic preview')
+    ).toBeTruthy();
+
+    await screen.unmount();
   });
 });

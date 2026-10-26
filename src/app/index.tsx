@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { IdentityAdapter } from '../application/identity/identity.types';
-import { createLoginUseCase } from '../application/identity/login-use-case';
+import type { IdentityAdapter } from '../use-cases/identity/identity.types';
+import { createLoginUseCase } from '../use-cases/identity/login-use-case';
 import {
   createSessionCoordinator,
   type Clock,
   type SessionCoordinator,
-} from '../application/session/session-coordinator';
+} from '../use-cases/session/session-coordinator';
+import type { PreferenceLoadResult } from '../use-cases/storage/load-synthetic-preference';
+import { createSyntheticPreferenceRestorer } from '../use-cases/storage/restore-synthetic-preference';
+import type { ProtectedStoragePort } from '../use-cases/storage/storage.types';
 import { canAccessSession } from '../domain/session/session-machine';
 import {
   createMockIdentityAdapter,
@@ -18,6 +21,7 @@ import {
   type AppStateEventSource,
 } from '../infrastructure/session/app-state-adapter';
 import { observeSessionDeadlines } from '../infrastructure/session/session-deadline-adapter';
+import { createInMemoryStorageAdapter } from '../infrastructure/storage/in-memory-storage-adapter';
 
 const systemClock: Clock = {
   now: () => Date.now(),
@@ -28,14 +32,10 @@ type SessionDemoProps = {
   clock: Clock;
   appStateSource?: AppStateEventSource;
   identityAdapter?: IdentityAdapter;
+  storageAdapter?: ProtectedStoragePort;
 };
 
-export function SessionDemo({
-  coordinator,
-  clock,
-  appStateSource,
-  identityAdapter,
-}: SessionDemoProps) {
+export function SessionDemo({ coordinator, clock, appStateSource, identityAdapter, storageAdapter }: SessionDemoProps) {
   const [username, setUsername] = useState(DEMO_USERNAME);
   const [accessCode, setAccessCode] = useState(DEMO_ACCESS_CODE);
   const [loginFeedback, setLoginFeedback] = useState<string | null>(null);
@@ -44,6 +44,23 @@ export function SessionDemo({
 
   const loginInFlight = useRef(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [restorationResult, setRestorationResult] = useState<PreferenceLoadResult | null>(null);
+
+  const defaultStorage = useMemo(
+    () => createInMemoryStorageAdapter(),
+    []
+  );
+
+  const storage = storageAdapter ?? defaultStorage;
+
+  const preferenceRestorer = useMemo(
+    () => createSyntheticPreferenceRestorer(
+      storage,
+      clock,
+      coordinator
+    ),
+    [storage, clock, coordinator]
+  );
 
   const defaultIdentityAdapter = useMemo(
     () => createMockIdentityAdapter(),
@@ -111,10 +128,28 @@ export function SessionDemo({
     };
   }, [coordinator, clock, appStateSource]);
 
-  const canViewProtected = canAccessSession(
-    machine,
-    clock.now()
-  );
+  useEffect(() => {
+    let mounted = true;
+
+    void preferenceRestorer.restore().then(
+      (result) => {
+        if (mounted) {
+          setRestorationResult(result);
+        }
+      },
+      () => {
+        if (mounted) {
+          setRestorationResult({ status: 'ERROR' });
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+    };
+  }, [preferenceRestorer]);
+
+  const canViewProtected = restorationResult !== null && canAccessSession(machine, clock.now());
 
   const isSignedOut =
     machine.sessionState.status === 'SIGNED_OUT' ||
@@ -199,6 +234,15 @@ export function SessionDemo({
         Foreground: {machine.isForeground ? 'yes' : 'no'}
       </Text>
 
+      <Text style={styles.status}>
+        Synthetic preference:{' '}
+        {restorationResult === null
+          ? 'loading'
+          : restorationResult.status === 'FOUND'
+            ? restorationResult.value
+            : 'unavailable'}
+      </Text>
+
       {canViewProtected ? (
         <View style={styles.protectedPanel}>
           <Text style={styles.protectedText}>
@@ -247,7 +291,11 @@ export function SessionDemo({
 
             <Button
               title="Simulate login"
-              disabled={!machine.isForeground || isAuthenticating}
+              disabled={
+                !machine.isForeground ||
+                isAuthenticating ||
+                restorationResult === null
+              }
               onPress={() => {
                 void handleLogin();
               }}
