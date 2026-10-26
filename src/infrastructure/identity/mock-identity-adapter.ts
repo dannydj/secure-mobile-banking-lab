@@ -1,7 +1,7 @@
 import type {
   IdentityAdapter,
   IdentityResult,
-} from '../../application/identity/identity.types';
+} from '../../use-cases/identity/identity.types';
 
 export const DEMO_USERNAME = 'demo-user';
 export const DEMO_ACCESS_CODE = 'demo-only';

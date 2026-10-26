@@ -101,8 +101,6 @@ export function transitionSession(
     return accepted({
       ...machine,
       sessionState: initialSessionState,
-      isForeground:
-        event.type === 'APPLICATION_RESTART' ? true : machine.isForeground,
     });
   }
 

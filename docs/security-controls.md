@@ -98,7 +98,7 @@ The domain session state machine is integrated with a simulated application life
 
 Implementation:
 
-- `src/application/session/session-coordinator.ts`
+- `src/use-cases/session/session-coordinator.ts`
 - `src/infrastructure/session/app-state-adapter.ts`
 - `src/infrastructure/session/session-deadline-adapter.ts`
 - `src/app/index.tsx`
@@ -146,8 +146,8 @@ The application integrates an explicit mock identity adapter with a guarded asyn
 
 Implementation:
 
-- `src/application/identity/identity.types.ts`
-- `src/application/identity/login-use-case.ts`
+- `src/use-cases/identity/identity.types.ts`
+- `src/use-cases/identity/login-use-case.ts`
 - `src/infrastructure/identity/mock-identity-adapter.ts`
 - `src/app/index.tsx`
 
@@ -182,6 +182,66 @@ Verified behavior:
 - CTRL-001 is SIMULATED, not DEVICE_VERIFIED.
 
 These results support the simulated implementation of CTRL-001 without establishing OWASP MASVS compliance.
+
+### 3.4 Fail-Closed Storage Boundary — Issue #12
+
+**Verification date:** 2026-10-26
+
+The application integrates a simulated storage boundary for non-authoritative synthetic preferences.
+
+Implementation:
+
+- `src/use-cases/storage/storage.types.ts`
+- `src/use-cases/storage/load-synthetic-preference.ts`
+- `src/use-cases/storage/save-synthetic-preference.ts`
+- `src/use-cases/storage/restore-synthetic-preference.ts`
+- `src/infrastructure/storage/in-memory-storage-adapter.ts`
+- `src/domain/session/session-machine.ts`
+- `src/app/index.tsx`
+
+Automated verification:
+
+- `__tests__/storage/in-memory-storage-adapter.test.ts`
+- `__tests__/storage/load-synthetic-preference.test.ts`
+- `__tests__/storage/save-synthetic-preference.test.ts`
+- `__tests__/storage/restore-synthetic-preference.test.ts`
+- `__tests__/session/session-machine.test.ts`
+- `__tests__/session/session-demo.test.tsx`
+
+Local validation: 103 passing tests across 13 Jest suites.
+
+Verified simulated behavior:
+
+- Only approved synthetic preference values are accepted.
+- Stored records require an expected schema version and valid timestamps.
+- Malformed, expired, and inconsistent records are rejected.
+- Read, write, and removal failures produce explicit outcomes.
+- Failed removal is never reported as successful deletion.
+- Application restart invalidates the existing session before storage reads complete.
+- Restart preserves the previously known foreground/background state.
+- Stored preference values cannot authorize a session.
+- Pending authentication results cannot restore access after restart.
+- UI restoration failures keep protected content hidden.
+- Storage reads that exceed the restoration timeout return ERROR without granting session access.
+- Storage responses arriving after timeout cannot change the completed restoration result.
+- Login is disabled while initial storage restoration is pending.
+- A storage timeout releases the initialization guard without restoring authentication.
+
+**Implementation limitations:**
+
+- Storage is provided by a non-persistent in-memory adapter.
+- No native encrypted storage or operating-system-backed key protection is implemented.
+- No production credentials, tokens, or customer data are stored.
+- No cryptographic integrity or authenticity verification is performed.
+- Restoration is simulated during component initialization, not verified through a native process restart.
+- Storage restoration uses a simulated two-second timeout. Late results are ignored, but the underlying storage operation is not physically cancelled.
+- Native Android and iOS behavior has not been verified.
+
+CTRL-005 has additional simulated restoration evidence.
+
+CTRL-008 remains PLANNED for protected storage because the actual platform-backed implementation is not present.
+
+These tests demonstrate defensive application behavior, not OWASP MASVS compliance or native secure-storage verification.
 
 ## 4. Authentication and Session Controls
 

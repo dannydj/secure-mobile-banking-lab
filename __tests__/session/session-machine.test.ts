@@ -559,4 +559,41 @@ describe('Session State Machine', () => {
 
     expect(canAccessSession(corrupted, START_TIME)).toBe(false);
   });
+
+  it('CTRL-006: restart does not mark a backgrounded app as foreground', () => {
+    const active = createActiveSession();
+
+    const background = transitionSession(
+      active,
+      { type: 'APP_BACKGROUND' },
+      START_TIME + 1_000
+    );
+
+    const restarted = transitionSession(
+      background.next,
+      { type: 'APPLICATION_RESTART' },
+      START_TIME + 2_000
+    );
+
+    expect(restarted.accepted).toBe(true);
+    expect(restarted.next.isForeground).toBe(false);
+    expect(restarted.next.sessionState.status).toBe('SIGNED_OUT');
+
+    const login = transitionSession(
+      restarted.next,
+      { type: 'LOGIN_SUCCESS' },
+      START_TIME + 3_000
+    );
+
+    expect(login.accepted).toBe(false);
+
+    const foreground = transitionSession(
+      restarted.next,
+      { type: 'APP_FOREGROUND' },
+      START_TIME + 4_000
+    );
+
+    expect(foreground.next.isForeground).toBe(true);
+    expect(foreground.next.sessionState.status).toBe('SIGNED_OUT');
+  });
 });

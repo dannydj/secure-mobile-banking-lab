@@ -1,6 +1,6 @@
 import type { AppStateStatus } from 'react-native';
 
-import { createSessionCoordinator } from '../../src/application/session/session-coordinator';
+import { createSessionCoordinator } from '../../src/use-cases/session/session-coordinator';
 import { observeAppState } from '../../src/infrastructure/session/app-state-adapter';
 
 const START_TIME = 1_000_000;
