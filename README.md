@@ -61,10 +61,6 @@ When no valid preference exists, the UI displays "Synthetic preference: unavaila
 
 Restoring a synthetic preference never restores an authenticated session. The application requires a new explicit simulated login to access protected synthetic content.
 
-The default demo starts with no saved preference. The UI displays "Synthetic preference: unavailable" until a valid preference is supplied through an injected adapter.
-
-The storage recovery flow is simulated. It must not be interpreted as native Keychain, Keystore, or production session restoration.
-
 Track development through [GitHub Issues](https://github.com/dannydj/secure-mobile-banking-lab/issues).
 
 ## Local Development

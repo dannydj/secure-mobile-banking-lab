@@ -291,6 +291,7 @@ Observed behavior:
 - Web storage remains temporary and non-encrypted.
 - No real credentials, authentication tokens, or customer data are persisted.
 - No OWASP MASVS certification or complete platform compliance is claimed.
+- Keychain accessibility configuration, platform backup and restore behavior, and persistence across app reinstallation have not been independently verified.
 
 CTRL-008 is classified as IMPLEMENTED, with functional iOS simulator evidence and additional platform verification pending.
 
