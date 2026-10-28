@@ -1,27 +1,18 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { IdentityAdapter } from '../use-cases/identity/identity.types';
-import { createLoginUseCase } from '../use-cases/identity/login-use-case';
-import {
-  createSessionCoordinator,
-  type Clock,
-  type SessionCoordinator,
-} from '../use-cases/session/session-coordinator';
-import type { PreferenceLoadResult } from '../use-cases/storage/load-synthetic-preference';
-import { createSyntheticPreferenceRestorer } from '../use-cases/storage/restore-synthetic-preference';
-import type { ProtectedStoragePort } from '../use-cases/storage/storage.types';
 import { canAccessSession } from '../domain/session/session-machine';
-import {
-  createMockIdentityAdapter,
-  DEMO_ACCESS_CODE,
-  DEMO_USERNAME,
-} from '../infrastructure/identity/mock-identity-adapter';
-import {
-  observeAppState,
-  type AppStateEventSource,
-} from '../infrastructure/session/app-state-adapter';
+import { createMockIdentityAdapter, DEMO_ACCESS_CODE, DEMO_USERNAME } from '../infrastructure/identity/mock-identity-adapter';
+import { observeAppState, type AppStateEventSource } from '../infrastructure/session/app-state-adapter';
 import { observeSessionDeadlines } from '../infrastructure/session/session-deadline-adapter';
 import { createInMemoryStorageAdapter } from '../infrastructure/storage/in-memory-storage-adapter';
+import { createPlatformStorageAdapter } from '../infrastructure/storage/platform-storage';
+import type { IdentityAdapter } from '../use-cases/identity/identity.types';
+import { createLoginUseCase } from '../use-cases/identity/login-use-case';
+import { createSessionCoordinator, type Clock, type SessionCoordinator } from '../use-cases/session/session-coordinator';
+import type { PreferenceLoadResult } from '../use-cases/storage/load-synthetic-preference';
+import { createSyntheticPreferenceRestorer } from '../use-cases/storage/restore-synthetic-preference';
+import { createSyntheticPreferenceStore } from '../use-cases/storage/save-synthetic-preference';
+import type { ProtectedStoragePort, SyntheticPreference } from '../use-cases/storage/storage.types';
 
 const systemClock: Clock = {
   now: () => Date.now(),
@@ -35,6 +26,10 @@ type SessionDemoProps = {
   storageAdapter?: ProtectedStoragePort;
 };
 
+type PreferenceCommand =
+  | Readonly<{ type: 'SAVE'; value: SyntheticPreference }>
+  | Readonly<{ type: 'CLEAR' }>;
+
 export function SessionDemo({ coordinator, clock, appStateSource, identityAdapter, storageAdapter }: SessionDemoProps) {
   const [username, setUsername] = useState(DEMO_USERNAME);
   const [accessCode, setAccessCode] = useState(DEMO_ACCESS_CODE);
@@ -46,12 +41,30 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [restorationResult, setRestorationResult] = useState<PreferenceLoadResult | null>(null);
 
+  const [isUpdatingPreference, setIsUpdatingPreference] = useState(false);
+
+  const [preferenceFeedback, setPreferenceFeedback] = useState<string | null>(null);
+
+  const preferenceUpdateInFlight = useRef(false);
+  const preferenceOperationVersion = useRef(0);
+
   const defaultStorage = useMemo(
     () => createInMemoryStorageAdapter(),
     []
   );
 
   const storage = storageAdapter ?? defaultStorage;
+
+  const preferenceStore = useMemo(
+    () => createSyntheticPreferenceStore(storage, clock),
+    [storage, clock]
+  );
+
+  useEffect(() => {
+    return () => {
+      preferenceOperationVersion.current += 1;
+    };
+  }, [preferenceStore]);
 
   const preferenceRestorer = useMemo(
     () => createSyntheticPreferenceRestorer(
@@ -214,6 +227,67 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
     }
   };
 
+  const updatePreference = async (
+    command: PreferenceCommand
+  ): Promise<void> => {
+    if (
+      preferenceUpdateInFlight.current ||
+      restorationResult === null ||
+      !coordinator.getSnapshot().isForeground
+    ) {
+      return;
+    }
+
+    preferenceUpdateInFlight.current = true;
+
+    const operationVersion = preferenceOperationVersion.current;
+
+    setIsUpdatingPreference(true);
+    setPreferenceFeedback(null);
+
+    try {
+      if (command.type === 'SAVE') {
+        const result = await preferenceStore.save(command.value);
+
+        if (operationVersion !== preferenceOperationVersion.current) {
+          return;
+        }
+
+        if (result.status === 'SAVED') {
+          setRestorationResult({
+            status: 'FOUND',
+            value: command.value,
+          });
+
+          setPreferenceFeedback('Synthetic preference saved.');
+        } else {
+          setRestorationResult({ status: 'ERROR' });
+          setPreferenceFeedback('Could not save synthetic preference.');
+        }
+      } else {
+        const result = await preferenceStore.clear();
+
+        if (operationVersion !== preferenceOperationVersion.current) {
+          return;
+        }
+
+        if (result.status === 'REMOVED') {
+          setRestorationResult({ status: 'MISSING' });
+          setPreferenceFeedback('Synthetic preference removed.');
+        } else {
+          setRestorationResult({ status: 'ERROR' });
+          setPreferenceFeedback('Could not remove synthetic preference.');
+        }
+      }
+    } finally {
+      preferenceUpdateInFlight.current = false;
+
+      if (operationVersion === preferenceOperationVersion.current) {
+        setIsUpdatingPreference(false);
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Secure Mobile Banking Lab</Text>
@@ -242,6 +316,56 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
             ? restorationResult.value
             : 'unavailable'}
       </Text>
+
+      <View style={styles.actions}>
+        <Button
+          title="Save sessions preference"
+          disabled={
+            !machine.isForeground ||
+            restorationResult === null ||
+            isUpdatingPreference
+          }
+          onPress={() => {
+            void updatePreference({
+              type: 'SAVE',
+              value: 'sessions',
+            });
+          }}
+        />
+
+        <Button
+          title="Save storage preference"
+          disabled={
+            !machine.isForeground ||
+            restorationResult === null ||
+            isUpdatingPreference
+          }
+          onPress={() => {
+            void updatePreference({
+              type: 'SAVE',
+              value: 'storage',
+            });
+          }}
+        />
+
+        <Button
+          title="Clear preference"
+          disabled={
+            !machine.isForeground ||
+            restorationResult === null ||
+            isUpdatingPreference
+          }
+          onPress={() => {
+            void updatePreference({ type: 'CLEAR' });
+          }}
+        />
+
+        {preferenceFeedback ? (
+          <Text style={styles.status}>
+            {preferenceFeedback}
+          </Text>
+        ) : null}
+      </View>
 
       {canViewProtected ? (
         <View style={styles.protectedPanel}>
@@ -348,10 +472,16 @@ export default function HomeScreen() {
     []
   );
 
+  const storageAdapter = useMemo(
+    () => createPlatformStorageAdapter(),
+    []
+  );
+
   return (
     <SessionDemo
       coordinator={coordinator}
       clock={systemClock}
+      storageAdapter={storageAdapter}
     />
   );
 }

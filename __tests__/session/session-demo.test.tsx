@@ -1,15 +1,13 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { AppStateStatus } from 'react-native';
 import { SessionDemo } from '../../src/app/index';
-import type {
-  IdentityAdapter,
-  IdentityResult,
-} from '../../src/use-cases/identity/identity.types';
+import { INACTIVITY_TIMEOUT_MS } from '../../src/domain/session/session-policy';
+import { createInMemoryStorageAdapter } from '../../src/infrastructure/storage/in-memory-storage-adapter';
+import type { IdentityAdapter, IdentityResult } from '../../src/use-cases/identity/identity.types';
 import { createSessionCoordinator } from '../../src/use-cases/session/session-coordinator';
 import { STORAGE_RESTORE_TIMEOUT_MS } from '../../src/use-cases/storage/restore-synthetic-preference';
 import type { ProtectedStoragePort } from '../../src/use-cases/storage/storage.types';
-import { INACTIVITY_TIMEOUT_MS } from '../../src/domain/session/session-policy';
-import { createInMemoryStorageAdapter } from '../../src/infrastructure/storage/in-memory-storage-adapter';
+import { SYNTHETIC_PREFERENCE_KEY } from '../../src/use-cases/storage/storage.types';
 
 const START_TIME = 1_000_000;
 
@@ -646,6 +644,163 @@ describe('Session Demo Integration', () => {
     expect(
       screen.getByText('Protected synthetic preview')
     ).toBeTruthy();
+
+    await screen.unmount();
+  });
+
+  it('CTRL-008: saves and restores a preference without restoring authentication', async () => {
+    const clock = { now: () => START_TIME };
+    const storage = createInMemoryStorageAdapter();
+    const source = createMockAppState('active');
+
+    const firstCoordinator = createSessionCoordinator(clock);
+
+    const firstScreen = await render(
+      <SessionDemo
+        coordinator={firstCoordinator}
+        clock={clock}
+        appStateSource={source}
+        storageAdapter={storage}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        firstScreen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(
+      firstScreen.getByText('Save sessions preference')
+    );
+
+    await waitFor(() => {
+      expect(
+        firstScreen.getByText('Synthetic preference: sessions')
+      ).toBeTruthy();
+    });
+
+    expect(
+      await storage.read(SYNTHETIC_PREFERENCE_KEY)
+    ).not.toBeNull();
+
+    await firstScreen.unmount();
+
+    const secondCoordinator = createSessionCoordinator(clock);
+
+    const secondScreen = await render(
+      <SessionDemo
+        coordinator={secondCoordinator}
+        clock={clock}
+        appStateSource={source}
+        storageAdapter={storage}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        secondScreen.getByText('Synthetic preference: sessions')
+      ).toBeTruthy();
+    });
+
+    expect(
+      secondScreen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(secondCoordinator.canAccess()).toBe(false);
+
+    expect(
+      secondScreen.queryByText('Protected synthetic preview')
+    ).toBeNull();
+
+    await secondScreen.unmount();
+  });
+
+  it('CTRL-008: removes a previously saved preference', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const storage = createInMemoryStorageAdapter();
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={createMockAppState('active')}
+        storageAdapter={storage}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(
+      screen.getByText('Save storage preference')
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: storage')
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(screen.getByText('Clear preference'));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference removed.')
+      ).toBeTruthy();
+    });
+
+    expect(
+      await storage.read(SYNTHETIC_PREFERENCE_KEY)
+    ).toBeNull();
+
+    expect(coordinator.canAccess()).toBe(false);
+
+    await screen.unmount();
+  });
+
+  it('CTRL-008: reports preference write failures without granting access', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+
+    const storage = createInMemoryStorageAdapter({
+      failingOperations: ['write'],
+    });
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={createMockAppState('active')}
+        storageAdapter={storage}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(
+      screen.getByText('Save sessions preference')
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Could not save synthetic preference.')
+      ).toBeTruthy();
+    });
+
+    expect(
+      screen.getByText('Session status: SIGNED_OUT')
+    ).toBeTruthy();
+
+    expect(coordinator.canAccess()).toBe(false);
 
     await screen.unmount();
   });
