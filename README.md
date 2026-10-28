@@ -216,41 +216,49 @@ This alignment does not imply formal MASVS compliance, independent assessment, o
 
 ## Known Dependency Security Advisories
 
-**Review date:** 2026-10-23
+**Assessment period:** 2026-10-23 to 2026-10-27
 
-After updating Expo SDK 58 dependencies, both `npm audit` and `npm audit --omit=dev` reported five high-severity findings in the dependency graph.
+The project tracks transitive dependency advisories separately from application-level security controls.
 
-### Affected Dependencies
+### Audit History
 
-| Dependency | Advisory | Status |
+| Date | Audit | Low | High | Total |
+| --- | --- | ---: | ---: | ---: |
+| 2026-10-23 | Initial audit | Not recorded | 5 | Not recorded |
+| 2026-10-27 | `npm audit --omit=dev` | 11 | 3 | 14 |
+| 2026-10-27 | `npm audit` | 13 | 3 | 16 |
+
+Audit findings include dependency-chain propagation and do not necessarily represent independent vulnerabilities exploitable in the mobile application.
+
+### Current Dependency Assessment
+
+| Dependency | Installed version | Assessment |
 | --- | --- | --- |
-| `node-forge` | [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) | Unresolved; no patched version published |
-| `zod` | [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) | Patched upstream in version 4.6.6; compatible transitive update pending |
+| `node-forge` | `1.4.2` | Not flagged by the current audit; outside the affected range of the originally tracked advisory |
+| `zod` | `3.25.76` | Advisory remains; the patched Zod 4 release is outside Expo CLI 58.1.16's declared dependency range |
+| `deepmerge` | `4.3.1` | Advisory remains; no compatible patched version identified |
 
-`node-forge@1.4.0` is introduced through `expo` and `@expo/cli`, both directly and through `@expo/code-signing-certificates`.
+An iOS source map inspection examined 1,175 source entries and found no matching paths for `zod`, `deepmerge`, or `node-forge`. This observation is limited to the inspected export and does not establish that vulnerable code paths are unreachable in all execution contexts.
 
-`zod@3.25.76` is introduced through `@expo/cli` and separately through `eslint-config-expo` and `eslint-plugin-react-hooks`.
+The identified packages are introduced through Expo, Jest, and ESLint dependency chains. No direct imports were found in the application's `src` or `__tests__` directories.
 
-Dependency audit findings do not independently establish that vulnerable code paths are reachable in the mobile application.
+This does not establish that affected code paths are unreachable or absent from every application bundle.
 
-The audit count includes findings propagated through dependency relationships and does not establish five independently exploitable application vulnerabilities.
+### Risk and Remediation Decision
 
-### Risk Assessment
+- Do not use `npm audit fix --force` because the proposed Expo downgrade is incompatible with the current SDK 58 implementation.
+- Do not force transitive dependency overrides without compatibility verification.
+- Monitor upstream Expo, Jest, and dependency fixes.
+- Reassess the dependency tree after compatible updates.
+- Do not introduce production credentials, customer data, or signing secrets into the educational project.
 
-- The project is an educational demonstration using synthetic data.
-- No production credentials, customer information, or production signing material are used.
-- The application does not intentionally implement cryptographic signature verification through node-forge.
-- Reachability of vulnerable upstream code paths has not been fully assessed.
-- The reported findings remain unresolved in the installed dependency graph.
-- `npm audit fix --force` proposes an incompatible Expo downgrade and is not an approved mitigation.
+The residual dependency risk remains documented and is not considered remediated.
 
-Avoiding sensitive production data reduces potential exposure but does not eliminate the vulnerabilities.
+For the detailed baseline, dependency paths, exposure analysis, and remediation decisions, see [Dependency Security Risk Assessment](docs/dependency-risk-assessment.md).
 
-### Follow-up
+Follow-up is tracked in [Issue #8](https://github.com/dannydj/secure-mobile-banking-lab/issues/8).
 
-Dependency remediation and risk reassessment are tracked in [Issue #8](https://github.com/dannydj/secure-mobile-banking-lab/issues/8).
-
-The findings must be reassessed before any production use or claim of release readiness.
+These findings must be reassessed before any production use or claim of release readiness.
 
 ## Security Documentation
 
@@ -261,6 +269,7 @@ The findings must be reassessed before any production use or claim of release re
 | [ADR-0001](docs/adr/0001-technology-and-architecture.md) | Technology and architecture decisions |
 | [Threat Model](docs/threat-model/threat-model.md) | STRIDE threats, planned mitigations, and residual risks |
 | [Security Controls](docs/security-controls.md) | Security control register and OWASP MASVS alignment |
+| [Dependency Risk Assessment](docs/dependency-risk-assessment.md) | Third-party dependency advisories, exposure analysis, and residual risk |
 
 The threat model and control register distinguish planned controls from implemented and device-verified behavior.
 
