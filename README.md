@@ -41,15 +41,25 @@ Completed foundations:
 - Controlled preference saving, loading, updating, and removal.
 - Simulated application restart that invalidates session access before reading stored information.
 - UI-level restoration of synthetic preferences without granting authentication or protected-content access.
-- Local verification with 103 passing Jest tests across 13 suites.
+- Expo SecureStore integration through an injectable native storage adapter.
+- Platform-specific storage implementations for iOS, Android, and web.
+- Native iOS simulator verification of synthetic preference persistence and removal.
+- Session access remains denied after application restart, regardless of restored preferences.
+- Local verification with 120 passing Jest tests across 15 suites.
 
 The GitHub Actions workflow was successfully verified on PR #4 and main. Subsequent implementation changes must pass CI on their respective pull requests.
 
 The domain-level session protection logic is implemented and tested using simulated events and synthetic data.
 
-Production credential verification, backend authentication, server-side authorization, native device lifecycle verification, biometrics, secure storage, and operating-system security enforcement remain pending.
+Production credential verification, backend authentication, server-side authorization, native biometric authentication, Android secure-storage runtime verification, physical-device testing, and broader operating-system security enforcement remain pending.
 
-The current storage adapter is memory-only. It does not persist data across application restarts and does not provide encryption or operating-system-backed protection.
+The application uses Expo SecureStore through platform-specific storage adapters on iOS and Android. Synthetic preference persistence and removal have been functionally verified on an iPhone 18 Pro Max simulator running iOS 27.0. Android and physical-device behavior have not yet been verified.
+
+The web implementation uses temporary, non-encrypted in-memory storage and does not persist preferences across page reloads.
+
+When no valid preference exists, the UI displays "Synthetic preference: unavailable". On supported native platforms, a previously saved synthetic preference can be restored after relaunch.
+
+Restoring a synthetic preference never restores an authenticated session. The application requires a new explicit simulated login to access protected synthetic content.
 
 The default demo starts with no saved preference. The UI displays "Synthetic preference: unavailable" until a valid preference is supplied through an injected adapter.
 

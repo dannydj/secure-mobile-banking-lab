@@ -41,7 +41,7 @@ All V1 controls were initially classified as `PLANNED`. Their status is updated 
 | CTRL-005 | Safe session restoration and metadata validation | T-05 | MASVS-AUTH, MASVS-STORAGE | SIMULATED |
 | CTRL-006 | Background locking and content obscuring | T-06 | MASVS-AUTH, MASVS-PLATFORM | SIMULATED |
 | CTRL-007 | Privacy-aware display and screen protection | T-07 | MASVS-PLATFORM, MASVS-PRIVACY | PLANNED |
-| CTRL-008 | Protected storage and error handling | T-08 | MASVS-STORAGE | PLANNED |
+| CTRL-008 | Protected storage and error handling | T-08 | MASVS-STORAGE | IMPLEMENTED |
 | CTRL-009 | Deterministic inactivity and lifecycle policy | T-09 | MASVS-AUTH | SIMULATED |
 | CTRL-010 | Isolation of simulated device trust signals | T-10 | MASVS-AUTH | PLANNED |
 | CTRL-011 | Minimal security event recording | T-11 | MASVS-STORAGE | PLANNED |
@@ -239,9 +239,60 @@ Verified simulated behavior:
 
 CTRL-005 has additional simulated restoration evidence.
 
-CTRL-008 remains PLANNED for protected storage because the actual platform-backed implementation is not present.
+At the completion of Issue #12, CTRL-008 remained PLANNED because platform-backed protected storage had not yet been implemented.
+
+The subsequent native integration and iOS simulator verification are documented in Section 3.5 (Issue #14).
 
 These tests demonstrate defensive application behavior, not OWASP MASVS compliance or native secure-storage verification.
+
+### 3.5 Native Secure Storage Integration — Issue #14
+
+**Verification date:** 2026-10-27
+
+Expo SecureStore is integrated behind the existing ProtectedStoragePort.
+
+Platform implementations:
+
+- iOS and Android: Expo SecureStore adapter.
+- Web: non-persistent in-memory adapter.
+- Unsupported platforms: storage operations fail explicitly.
+
+**Automated verification:**
+
+- 120 passing Jest tests across 15 suites.
+- Native adapter operations and simulated failures.
+- Platform adapter selection.
+- Synthetic preference save, restore, and removal.
+- Session access restrictions during restoration.
+
+**iOS simulator verification:**
+
+- Device: iPhone 18 Pro Max.
+- Runtime: iOS 27.0.
+- Xcode: 27.1 (27A9275).
+- Expo SDK: 58.
+- Node.js: 22.23.4.
+- Native build: successful.
+
+Observed behavior:
+
+1. Saving a synthetic preference does not authenticate a session.
+2. The preference remains available after application termination and relaunch.
+3. The previous authenticated session is not restored.
+4. Protected synthetic content remains hidden after relaunch.
+5. Clearing the preference removes it from the interface.
+6. The preference remains unavailable following the subsequent relaunch.
+
+**Limitations:**
+
+- Verification was performed on an iOS simulator, not a physical device.
+- Android runtime behavior has not been verified.
+- Cryptographic properties of iOS Keychain were not independently audited.
+- Web storage remains temporary and non-encrypted.
+- No real credentials, authentication tokens, or customer data are persisted.
+- No OWASP MASVS certification or complete platform compliance is claimed.
+
+CTRL-008 is classified as IMPLEMENTED, with functional iOS simulator evidence and additional platform verification pending.
 
 ## 4. Authentication and Session Controls
 
