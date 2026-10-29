@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button, StyleSheet, Text, TextInput, View } from 'react-native';
 import { canAccessSession } from '../domain/session/session-machine';
+import { createPlatformBiometricAdapter } from '../infrastructure/biometrics/platform-biometric';
 import { createMockIdentityAdapter, DEMO_ACCESS_CODE, DEMO_USERNAME } from '../infrastructure/identity/mock-identity-adapter';
 import { observeAppState, type AppStateEventSource } from '../infrastructure/session/app-state-adapter';
 import { observeSessionDeadlines } from '../infrastructure/session/session-deadline-adapter';
 import { createInMemoryStorageAdapter } from '../infrastructure/storage/in-memory-storage-adapter';
 import { createPlatformStorageAdapter } from '../infrastructure/storage/platform-storage';
+import { createBiometricReauthenticationUseCase } from '../use-cases/biometrics/biometric-reauthentication-use-case';
+import type { BiometricAuthenticationPort } from '../use-cases/biometrics/biometric.types';
 import type { IdentityAdapter } from '../use-cases/identity/identity.types';
 import { createLoginUseCase } from '../use-cases/identity/login-use-case';
 import { createSessionCoordinator, type Clock, type SessionCoordinator } from '../use-cases/session/session-coordinator';
@@ -24,13 +27,14 @@ type SessionDemoProps = {
   appStateSource?: AppStateEventSource;
   identityAdapter?: IdentityAdapter;
   storageAdapter?: ProtectedStoragePort;
+  biometricAdapter?: BiometricAuthenticationPort;
 };
 
 type PreferenceCommand =
   | Readonly<{ type: 'SAVE'; value: SyntheticPreference }>
   | Readonly<{ type: 'CLEAR' }>;
 
-export function SessionDemo({ coordinator, clock, appStateSource, identityAdapter, storageAdapter }: SessionDemoProps) {
+export function SessionDemo({ coordinator, clock, appStateSource, identityAdapter, storageAdapter, biometricAdapter }: SessionDemoProps) {
   const [username, setUsername] = useState(DEMO_USERNAME);
   const [accessCode, setAccessCode] = useState(DEMO_ACCESS_CODE);
   const [loginFeedback, setLoginFeedback] = useState<string | null>(null);
@@ -40,6 +44,12 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
   const loginInFlight = useRef(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [restorationResult, setRestorationResult] = useState<PreferenceLoadResult | null>(null);
+
+  const [isReauthenticating, setIsReauthenticating] = useState(false);
+  const [biometricFeedback, setBiometricFeedback] = useState<string | null>(null);
+
+  const biometricInFlight = useRef(false);
+  const biometricRequestVersion = useRef(0);
 
   const [isUpdatingPreference, setIsUpdatingPreference] = useState(false);
 
@@ -89,6 +99,26 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
     [identityAdapter, defaultIdentityAdapter, coordinator]
   );
 
+  const defaultBiometricAdapter = useMemo(
+    () => createPlatformBiometricAdapter(),
+    []
+  );
+
+  const biometricUseCase = useMemo(
+    () => createBiometricReauthenticationUseCase(
+      biometricAdapter ?? defaultBiometricAdapter,
+      coordinator
+    ),
+    [biometricAdapter, defaultBiometricAdapter, coordinator]
+  );
+
+  useEffect(() => {
+    return () => {
+      biometricRequestVersion.current += 1;
+      biometricUseCase.dispose();
+    };
+  }, [biometricUseCase]);
+
   useEffect(() => {
     return () => {
       requestVersion.current += 1;
@@ -106,23 +136,34 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
     let wasForeground = coordinator.getSnapshot().isForeground;
 
     const unsubscribe = coordinator.subscribe(() => {
-      const isForeground = coordinator.getSnapshot().isForeground;
+      const snapshot = coordinator.getSnapshot();
+      const isForeground = snapshot.isForeground;
 
       if (wasForeground && !isForeground) {
         requestVersion.current += 1;
         loginInFlight.current = false;
-
         loginUseCase.cancel();
 
         setIsAuthenticating(false);
         setLoginFeedback(null);
       }
 
+      const biometricRequestIsPending = snapshot.sessionState.status === 'LOCKED' && snapshot.sessionState.reauthenticationRequestId !== null;
+
+      if (biometricInFlight.current && !isForeground && !biometricRequestIsPending) {
+        biometricRequestVersion.current += 1;
+        biometricInFlight.current = false;
+        biometricUseCase.cancel();
+
+        setIsReauthenticating(false);
+        setBiometricFeedback(null);
+      }
+
       wasForeground = isForeground;
     });
 
     return unsubscribe;
-  }, [coordinator, loginUseCase]);
+  }, [coordinator, loginUseCase, biometricUseCase]);
 
   useEffect(() => {
     const stopAppState = observeAppState(
@@ -225,6 +266,67 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
         setIsAuthenticating(false);
       }
     }
+  };
+
+  const handleBiometricUnlock = async (): Promise<void> => {
+    if (
+      biometricInFlight.current ||
+      coordinator.getSnapshot().sessionState.status !== 'LOCKED'
+    ) {
+      return;
+    }
+
+    biometricInFlight.current = true;
+
+    const currentRequest = ++biometricRequestVersion.current;
+
+    setIsReauthenticating(true);
+    setBiometricFeedback(null);
+
+    try {
+      const result = await biometricUseCase.unlock();
+
+      if (currentRequest !== biometricRequestVersion.current) {
+        return;
+      }
+
+      switch (result.status) {
+        case 'UNLOCKED':
+          setBiometricFeedback(null);
+          break;
+        case 'FAILURE':
+          setBiometricFeedback('Device biometrics were not accepted.');
+          break;
+        case 'CANCELLED':
+          setBiometricFeedback('Biometric authentication cancelled.');
+          break;
+        case 'UNAVAILABLE':
+          setBiometricFeedback('Biometric unlock is unavailable.');
+          break;
+        case 'BUSY':
+          setBiometricFeedback('A biometric request is already pending.');
+          break;
+        case 'ERROR':
+          setBiometricFeedback('Biometric authentication failed.');
+          break;
+      }
+    } finally {
+      if (currentRequest === biometricRequestVersion.current) {
+        biometricInFlight.current = false;
+        setIsReauthenticating(false);
+      }
+    }
+  };
+
+  const handleLogout = (): void => {
+    biometricRequestVersion.current += 1;
+    biometricInFlight.current = false;
+    biometricUseCase.cancel();
+
+    setIsReauthenticating(false);
+    setBiometricFeedback(null);
+
+    coordinator.dispatch({ type: 'LOGOUT' });
   };
 
   const updatePreference = async (
@@ -449,12 +551,29 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
               }}
             />
 
-            <Button
-              title="Log out"
-              onPress={() => {
-                coordinator.dispatch({ type: 'LOGOUT' });
-              }}
-            />
+            {machine.sessionState.status === 'LOCKED' ? (
+              <>
+                <Button
+                  title="Unlock with device biometrics"
+                  disabled={
+                    !machine.isForeground ||
+                    isReauthenticating ||
+                    restorationResult === null
+                  }
+                  onPress={() => {
+                    void handleBiometricUnlock();
+                  }}
+                />
+
+                {biometricFeedback ? (
+                  <Text style={styles.status}>
+                    {biometricFeedback}
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+
+            <Button title="Log out" onPress={handleLogout} />
           </>
         )}
       </View>

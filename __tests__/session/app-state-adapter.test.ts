@@ -1,7 +1,6 @@
 import type { AppStateStatus } from 'react-native';
-
-import { createSessionCoordinator } from '../../src/use-cases/session/session-coordinator';
 import { observeAppState } from '../../src/infrastructure/session/app-state-adapter';
+import { createSessionCoordinator } from '../../src/use-cases/session/session-coordinator';
 
 const START_TIME = 1_000_000;
 
@@ -153,5 +152,42 @@ describe('AppState Adapter', () => {
     source.emit('background');
 
     expect(coordinator.getSnapshot().isForeground).toBe(true);
+  });
+
+  it('CTRL-004: preserves a locked biometric request during transient inactive state', () => {
+    const coordinator = createSessionCoordinator({
+      now: () => START_TIME,
+    });
+
+    const source = createMockAppState('active');
+    const cleanup = observeAppState(coordinator, source);
+
+    coordinator.dispatch({ type: 'LOGIN_SUCCESS' });
+    coordinator.dispatch({ type: 'LOCK_REQUESTED' });
+
+    coordinator.dispatch({
+      type: 'REAUTHENTICATION_REQUESTED',
+      requestId: 'synthetic-request-001',
+    });
+
+    source.emit('inactive');
+
+    expect(coordinator.getSnapshot().isForeground).toBe(false);
+
+    expect(coordinator.canAccess()).toBe(false);
+
+    expect(
+      coordinator.getSnapshot().sessionState.reauthenticationRequestId
+    ).toBe('synthetic-request-001');
+
+    source.emit('background');
+
+    expect(
+      coordinator.getSnapshot().sessionState.reauthenticationRequestId
+    ).toBeNull();
+
+    expect(coordinator.canAccess()).toBe(false);
+
+    cleanup();
   });
 });

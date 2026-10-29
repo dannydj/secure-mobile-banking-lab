@@ -3,6 +3,7 @@ import type { AppStateStatus } from 'react-native';
 import { SessionDemo } from '../../src/app/index';
 import { INACTIVITY_TIMEOUT_MS } from '../../src/domain/session/session-policy';
 import { createInMemoryStorageAdapter } from '../../src/infrastructure/storage/in-memory-storage-adapter';
+import type { BiometricAuthenticationResult } from '../../src/use-cases/biometrics/biometric.types';
 import type { IdentityAdapter, IdentityResult } from '../../src/use-cases/identity/identity.types';
 import { createSessionCoordinator } from '../../src/use-cases/session/session-coordinator';
 import { STORAGE_RESTORE_TIMEOUT_MS } from '../../src/use-cases/storage/restore-synthetic-preference';
@@ -804,4 +805,257 @@ describe('Session Demo Integration', () => {
 
     await screen.unmount();
   });
+
+  it('CTRL-004: exposes biometric unlock only while locked', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const authenticate = jest.fn(async () => ({
+      status: 'SUCCESS' as const,
+    }));
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={createMockAppState('active')}
+        biometricAdapter={{ authenticate }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    expect(
+      screen.queryByText('Unlock with device biometrics')
+    ).toBeNull();
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Session status: ACTIVE')).toBeTruthy();
+    });
+
+    expect(
+      screen.queryByText('Unlock with device biometrics')
+    ).toBeNull();
+
+    await fireEvent.press(screen.getByText('Lock session'));
+
+    expect(screen.getByText('Session status: LOCKED')).toBeTruthy();
+    expect(screen.queryByText('Protected synthetic preview')).toBeNull();
+
+    await fireEvent.press(
+      screen.getByText('Unlock with device biometrics')
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Session status: ACTIVE')).toBeTruthy();
+    });
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Protected synthetic preview')).toBeTruthy();
+
+    await screen.unmount();
+  });
+
+  it('CTRL-004: ignores biometric success after logout', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+
+    let resolveAuthentication!: (
+      result: BiometricAuthenticationResult
+    ) => void;
+
+    const authenticate = jest.fn(
+      () => new Promise<BiometricAuthenticationResult>((resolve) => {
+        resolveAuthentication = resolve;
+      })
+    );
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={createMockAppState('active')}
+        biometricAdapter={{ authenticate }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Session status: ACTIVE')).toBeTruthy();
+    });
+
+    await fireEvent.press(screen.getByText('Lock session'));
+    await fireEvent.press(
+      screen.getByText('Unlock with device biometrics')
+    );
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+
+    await fireEvent.press(screen.getByText('Log out'));
+
+    await act(async () => {
+      resolveAuthentication({ status: 'SUCCESS' });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Session status: SIGNED_OUT')).toBeTruthy();
+    expect(screen.queryByText('Protected synthetic preview')).toBeNull();
+    expect(coordinator.canAccess()).toBe(false);
+
+    await screen.unmount();
+  });
+
+  it('CTRL-004: completes Face ID after transient inactive state', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    let resolveAuthentication!: (
+      result: BiometricAuthenticationResult
+    ) => void;
+
+    const authenticate = jest.fn(
+      () => new Promise<BiometricAuthenticationResult>((resolve) => {
+        resolveAuthentication = resolve;
+      })
+    );
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        biometricAdapter={{ authenticate }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+    await fireEvent.press(screen.getByText('Lock session'));
+
+    await fireEvent.press(
+      screen.getByText('Unlock with device biometrics')
+    );
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+
+    await act(() => {
+      source.emit('inactive');
+    });
+
+    expect(coordinator.canAccess()).toBe(false);
+    expect(
+      coordinator.getSnapshot().sessionState.reauthenticationRequestId
+    ).toBe('synthetic-request-001');
+
+    await act(async () => {
+      resolveAuthentication({ status: 'SUCCESS' });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Session status: LOCKED')).toBeTruthy();
+    expect(screen.queryByText('Protected synthetic preview')).toBeNull();
+
+    await act(() => {
+      source.emit('active');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Session status: ACTIVE')).toBeTruthy();
+    });
+
+    expect(coordinator.canAccess()).toBe(true);
+    expect(screen.getByText('Protected synthetic preview')).toBeTruthy();
+
+    await screen.unmount();
+  });
+
+  it('CTRL-004: rejects biometric success after inactive transitions to background', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+    const source = createMockAppState('active');
+
+    let resolveAuthentication!: (
+      result: BiometricAuthenticationResult
+    ) => void;
+
+    const authenticate = jest.fn(
+      () => new Promise<BiometricAuthenticationResult>((resolve) => {
+        resolveAuthentication = resolve;
+      })
+    );
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={source}
+        biometricAdapter={{ authenticate }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Synthetic preference: unavailable')
+      ).toBeTruthy();
+    });
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+    await fireEvent.press(screen.getByText('Lock session'));
+
+    await fireEvent.press(
+      screen.getByText('Unlock with device biometrics')
+    );
+
+    expect(authenticate).toHaveBeenCalledTimes(1);
+
+    await act(() => {
+      source.emit('inactive');
+    });
+
+    expect(
+      coordinator.getSnapshot().sessionState.reauthenticationRequestId
+    ).toBe('synthetic-request-001');
+
+    await act(() => {
+      source.emit('background');
+    });
+
+    expect(
+      coordinator.getSnapshot().sessionState.reauthenticationRequestId
+    ).toBeNull();
+
+    await act(() => {
+      source.emit('active');
+    });
+
+    await act(async () => {
+      resolveAuthentication({ status: 'SUCCESS' });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Session status: LOCKED')).toBeTruthy();
+    expect(screen.queryByText('Protected synthetic preview')).toBeNull();
+    expect(coordinator.canAccess()).toBe(false);
+
+    await screen.unmount();
+  });
+
 });

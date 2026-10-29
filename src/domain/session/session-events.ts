@@ -43,4 +43,7 @@ export type SessionEvent =
   }>
   | Readonly<{
     type: 'APPLICATION_RESTART';
+  }>
+  | Readonly<{
+    type: 'APP_INACTIVE';
   }>;
