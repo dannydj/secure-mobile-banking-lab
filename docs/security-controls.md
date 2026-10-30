@@ -401,7 +401,7 @@ The verification results above document observed behavior, not independent secur
 
 CTRL-012 is classified as IMPLEMENTED with documented iOS simulator verification. CTRL-004 remains SIMULATED for stale-result security scenarios validated through deterministic tests.
 
-CI verification for Issue #17 remains pending until the pull request is created and its checks complete.
+CI verification for Issue #17 **passed** on 2026-10-29: [GitHub Actions CI run #18](https://github.com/dannydj/secure-mobile-banking-lab/actions/runs/40984163187) succeeded on commit `29f7dc8`, including `npm ci`, lint, TypeScript typecheck, Jest tests, and Expo dependency compatibility checks. PR #18 remains open and unmerged.
 
 **Final native verification — 2026-10-29**
 
