@@ -115,7 +115,7 @@ Verified functionality includes:
 - Continued session locking after non-matching Face ID attempts and cancellation.
 - Safe handling of transient inactive states during native biometric prompts.
 
-**Automated verification:** 154 passing Jest tests across 18 suites.
+**Automated verification:** 155 passing Jest tests across 18 suites.
 
 **Limitations:** The iOS simulator does not verify physical biometric sensors. Android and physical devices have not been functionally verified. Native biometric verification is not equivalent to initial identity verification, server authorization, or security certification.
 
