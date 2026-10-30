@@ -232,6 +232,20 @@ export function transitionSession(
         ? accepted(current)
         : rejected(current);
 
+    case 'APP_INACTIVE':
+      return accepted({
+        ...current,
+        isForeground: false,
+        sessionState:
+          sessionState.status === 'ACTIVE'
+            ? {
+              status: 'LOCKED',
+              session: sessionState.session,
+              reauthenticationRequestId: null,
+            }
+            : sessionState,
+      });
+
     case 'APP_BACKGROUND':
       return accepted({
         ...current,

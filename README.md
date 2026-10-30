@@ -10,9 +10,9 @@ SMBL is not a production banking application or a security-certified product.
 
 ## Project Status
 
-**Current phase: V1 simulated identity, session lifecycle, and fail-closed storage boundary integration**
+**Current phase: V1 native biometric reauthentication and secure storage integration**
 
-The initial Expo and React Native application is operational in a web development environment.
+The Expo and React Native application is operational in web development and has been built and functionally verified on an iOS simulator.
 
 Completed foundations:
 
@@ -45,13 +45,19 @@ Completed foundations:
 - Platform-specific storage implementations for iOS, Android, and web.
 - Native iOS simulator verification of synthetic preference persistence and removal.
 - Session access remains denied after application restart, regardless of restored preferences.
-- Local verification with 120 passing Jest tests across 15 suites.
+- Native biometric reauthentication through Expo LocalAuthentication.
+- Explicit biometric success, failure, cancellation, unavailability, and error handling.
+- Session and request correlation preventing stale biometric results from authorizing access.
+- Safe handling of transient iOS inactive states without bypassing background session protection.
+- Fail-closed biometric behavior on web and unsupported platforms.
+- Native iOS simulator verification of successful Face ID reauthentication, non-matching attempts, and cancellation.
+- Local verification with 155 passing Jest tests across 18 suites.
 
 The GitHub Actions workflow was successfully verified on PR #4 and main. Subsequent implementation changes must pass CI on their respective pull requests.
 
 The domain-level session protection logic is implemented and tested using simulated events and synthetic data.
 
-Production credential verification, backend authentication, server-side authorization, native biometric authentication, Android secure-storage runtime verification, physical-device testing, and broader operating-system security enforcement remain pending.
+Production credential verification, backend authentication, server-side authorization, Android runtime verification, physical-device testing, and broader operating-system security enforcement remain pending.
 
 The application uses Expo SecureStore through platform-specific storage adapters on iOS and Android. Synthetic preference persistence and removal have been functionally verified on an iPhone 18 Pro Max simulator running iOS 27.0. Android and physical-device behavior have not yet been verified.
 
@@ -99,11 +105,23 @@ GitHub Actions is configured to execute the same checks on pull requests targeti
 
 ### Platform Verification
 
-Native Android and iOS security behavior has not yet been verified.
+**iOS simulator:** Native Expo development build successfully executed on an iPhone 18 Pro Max simulator running iOS 27.0.
 
-Biometrics, protected storage, background privacy controls, and other native integrations will be implemented and evaluated in later issues.
+Verified functionality includes:
 
-Expo SDK 58 may require development builds rather than the currently available Expo Go application on some physical devices.
+- Synthetic preference persistence and removal using Expo SecureStore.
+- Native Expo LocalAuthentication flow using simulated Face ID responses to reauthenticate a valid locked synthetic session.
+- Protected-content restoration after successful local biometric verification.
+- Continued session locking after non-matching Face ID attempts and cancellation.
+- Safe handling of transient inactive states during native biometric prompts.
+
+**Automated verification:** 155 passing Jest tests across 18 suites.
+
+**Limitations:** The iOS simulator does not verify physical biometric sensors. Android and physical devices have not been functionally verified. Native biometric verification is not equivalent to initial identity verification, server authorization, or security certification.
+
+Native biometric testing on iOS requires a development build rather than Expo Go.
+
+See [Security Controls](docs/security-controls.md#36-native-biometric-reauthentication--issue-17) for detailed observations and limitations.
 
 ## Problem Statement
 

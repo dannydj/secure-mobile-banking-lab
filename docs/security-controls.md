@@ -45,7 +45,7 @@ All V1 controls were initially classified as `PLANNED`. Their status is updated 
 | CTRL-009 | Deterministic inactivity and lifecycle policy | T-09 | MASVS-AUTH | SIMULATED |
 | CTRL-010 | Isolation of simulated device trust signals | T-10 | MASVS-AUTH | PLANNED |
 | CTRL-011 | Minimal security event recording | T-11 | MASVS-STORAGE | PLANNED |
-| CTRL-012 | Safe biometric failures and recovery | T-12 | MASVS-AUTH | PLANNED |
+| CTRL-012 | Safe biometric failures and recovery | T-12 | MASVS-AUTH | IMPLEMENTED |
 | CTRL-013 | Synthetic data and repository hygiene | T-13 | MASVS-STORAGE, MASVS-PRIVACY | PLANNED |
 
 MASVS mappings indicate relevant security topics, not complete satisfaction of individual MASVS requirements.
@@ -294,6 +294,128 @@ Observed behavior:
 - Keychain accessibility configuration, platform backup and restore behavior, and persistence across app reinstallation have not been independently verified.
 
 CTRL-008 is classified as IMPLEMENTED, with functional iOS simulator evidence and additional platform verification pending.
+
+### 3.6 Native Biometric Reauthentication — Issue #17
+
+**Verification date:** 2026-10-27
+
+Native local biometric reauthentication is integrated through Expo LocalAuthentication, using an injectable application port and the existing session state machine.
+
+Biometric verification is available only for an existing, valid, locked synthetic session. It does not establish initial identity, restore a signed-out session, or replace backend authorization.
+
+**Implementation:**
+
+- `src/use-cases/biometrics/biometric.types.ts`
+- `src/use-cases/biometrics/biometric-reauthentication-use-case.ts`
+- `src/infrastructure/biometrics/expo-biometric-adapter.ts`
+- `src/infrastructure/biometrics/unavailable-biometric-adapter.ts`
+- `src/infrastructure/biometrics/platform-biometric.ts`
+- `src/infrastructure/biometrics/platform-biometric.native.ts`
+- `src/infrastructure/biometrics/platform-biometric.web.ts`
+- `src/domain/session/session-machine.ts`
+- `src/infrastructure/session/app-state-adapter.ts`
+- `src/app/index.tsx`
+
+Platform selection:
+
+- iOS and Android: native Expo LocalAuthentication adapter.
+- Web and unsupported platforms: unavailable adapter that never reports success.
+- iOS Face ID usage permission: configured in `app.json`.
+
+**Automated verification:**
+
+The final recorded local validation completed with:
+
+- 155 passing Jest tests across 18 suites.
+- TypeScript type checking passed.
+- ESLint passed.
+- `git diff --check` passed.
+- Expo SDK 58 dependency compatibility checks passed during implementation.
+
+Relevant test files:
+
+- `__tests__/biometrics/expo-biometric-adapter.test.ts`
+- `__tests__/biometrics/unavailable-biometric-adapter.test.ts`
+- `__tests__/biometrics/biometric-reauthentication-use-case.test.ts`
+- `__tests__/session/session-machine.test.ts`
+- `__tests__/session/app-state-adapter.test.ts`
+- `__tests__/session/session-demo.test.tsx`
+
+**iOS simulator verification:**
+
+- Device: iPhone 18 Pro Max simulator.
+- Runtime: iOS 27.0.
+- Xcode: 27.1.
+- Expo SDK: 58.
+- Native build: successful, with zero build errors and one warning.
+- Native module: `expo-local-authentication@58.0.2`.
+
+Observed behavior:
+
+1. Synthetic login establishes an ACTIVE session.
+2. Manual locking changes the session to LOCKED and hides protected synthetic content.
+3. A matching simulated Face ID result unlocks the valid session and restores protected content.
+4. A non-matching simulated Face ID result displays the native recognition failure prompt without granting access.
+5. Cancelling the native Face ID prompt preserves LOCKED and keeps protected content hidden.
+6. A subsequent matching Face ID result can successfully unlock the same still-valid session.
+7. A transient iOS inactive state during native authentication does not prematurely invalidate a valid pending biometric request.
+
+**Lifecycle regression investigation:**
+
+Initial iOS simulator verification exposed an issue where a transient AppState `inactive` event was treated as `APP_BACKGROUND`. This invalidated pending biometric requests and prevented successful local reauthentication.
+
+The implementation was corrected to distinguish `inactive` from an actual `background` transition.
+
+Regression tests verify that:
+
+- Protected access remains denied while the application is inactive.
+- A pending biometric result can complete after returning to active, if its session and request identifiers remain valid.
+- A real background transition invalidates the pending request.
+- Results received after logout, expiration, or request invalidation cannot restore access.
+- Successful biometric reauthentication does not extend the absolute session deadline.
+
+**Security controls:**
+
+- CTRL-002: protected content remains subject to session authorization.
+- CTRL-003: absolute session expiration remains authoritative.
+- CTRL-004: stale and invalidated biometric results are rejected.
+- CTRL-006: real background transitions continue to invalidate pending reauthentication.
+- CTRL-012: native biometric outcomes are explicitly handled without treating failures as successful authentication.
+
+**Evidence:**
+
+Native simulator behavior was reviewed using a screen recording captured on 2026-10-27. The recording and screenshots are not included in this public repository.
+
+The verification results above document observed behavior, not independent security certification.
+
+**Limitations:**
+
+- Simulator Face ID outcomes are simulated and do not verify physical biometric sensors.
+- Android runtime behavior has not been manually verified.
+- Physical-device biometric behavior has not been verified.
+- A non-matching Face ID attempt was observed, but an independent terminal native FAILURE response was not established; failure handling is covered by automated tests.
+- The application does not physically cancel every operating-system biometric prompt when an in-flight result becomes obsolete.
+- No backend identity verification or remote transaction authorization is implemented.
+- Session and request identifiers are synthetic, not cryptographic authentication credentials.
+- No Face ID security certification, complete OWASP MASVS compliance, or production readiness is claimed.
+
+CTRL-012 is classified as IMPLEMENTED with documented iOS simulator verification. CTRL-004 remains SIMULATED for stale-result security scenarios validated through deterministic tests.
+
+CI verification for Issue #17 **passed** on 2026-10-29: [GitHub Actions CI run #18](https://github.com/dannydj/secure-mobile-banking-lab/actions/runs/40984163187) succeeded on commit `29f7dc8`, including `npm ci`, lint, TypeScript typecheck, Jest tests, and Expo dependency compatibility checks. PR #18 remains open and unmerged.
+
+**Final native verification — 2026-10-29**
+
+After aligning Expo SDK 58 patch dependencies and updating
+React Native to 0.88.1, the iOS native project was regenerated.
+
+- CocoaPods installation completed successfully.
+- Native build succeeded with zero errors and one warning.
+- Matching simulated Face ID restored the valid locked session.
+- Non-matching Face ID did not unlock the session.
+- Cancelling Face ID preserved LOCKED and protected-content restrictions.
+- Verification environment: iPhone 18 Pro Max simulator, iOS 27.0.
+
+Physical-device and Android verification remain pending.
 
 ## 4. Authentication and Session Controls
 
