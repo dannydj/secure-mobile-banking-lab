@@ -1058,4 +1058,30 @@ describe('Session Demo Integration', () => {
     await screen.unmount();
   });
 
+  it('CTRL-007: masks fictional account and hides it when locked', async () => {
+    const clock = { now: () => START_TIME };
+    const coordinator = createSessionCoordinator(clock);
+
+    const screen = await render(
+      <SessionDemo
+        coordinator={coordinator}
+        clock={clock}
+        appStateSource={createMockAppState('active')}
+      />
+    );
+
+    expect(screen.queryByText('Fictional account: ••••••••6789')).toBeNull();
+
+    await fireEvent.press(screen.getByText('Simulate login'));
+
+    expect(screen.getByText('Fictional account: ••••••••6789')).toBeTruthy();
+    expect(screen.queryByText('Fictional account: 000123456789')).toBeNull();
+
+    await fireEvent.press(screen.getByText('Lock session'));
+
+    expect(screen.queryByText('Fictional account: ••••••••6789')).toBeNull();
+    expect(screen.getByText('Protected content hidden')).toBeTruthy();
+
+    await screen.unmount();
+  });
 });
