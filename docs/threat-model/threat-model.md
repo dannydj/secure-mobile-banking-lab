@@ -295,7 +295,7 @@ Fictional financial information remains visible in application previews or durin
 
 Operating-system previews and capture mechanisms vary. Universal screenshot or recording prevention is not guaranteed.
 
-### T-07 — Sensitive Data Exposure Through Screenshots
+### T-07 — Sensitive Data Exposure Through UI and Screenshots
 
 - **Category:** Information Disclosure
 - **Priority:** Medium
@@ -304,23 +304,35 @@ Operating-system previews and capture mechanisms vary. Universal screenshot or r
 
 **Threat**
 
-Displayed fictional account information may be captured through screenshots, screen recording, or external observation.
+Fictional account identifiers and protected synthetic financial information may be unnecessarily exposed through application rendering, screenshots, screen recordings, operating-system application previews, or external observation.
 
-**Planned Mitigations**
+**Implemented Mitigations — Issue #19**
 
-- Mask fictional account identifiers.
-- Provide privacy-aware display controls.
-- Use supported screen-capture protections where appropriate.
-- Document OS-specific protection limitations.
+- Mask fictional account identifiers before rendering, exposing only the last four digits when applicable.
+- Keep protected synthetic account information hidden unless the existing session authorization policy permits access.
+- Hide protected content when the session is `SIGNED_OUT`, `LOCKED`, or `EXPIRED`, and during background transitions.
+- Keep privacy-aware presentation logic separate from session authorization decisions.
+
+**Pending Platform Evaluation**
+
+- Document application-switcher preview behavior on the iOS simulator.
+- Evaluate screenshot and application-preview behavior on additional supported native platforms, including Android.
+- Assess native screen-capture mitigations separately if justified by observed risks.
+- Document platform-specific limitations without claiming universal screenshot prevention.
 
 **Verification**
 
-- UI-003: Privacy masking prevents display of full identifiers.
-- PLATFORM-002: Test supported capture behavior on the selected platform.
+- UI-003: Automated tests verify account identifier masking and protected-content visibility restrictions.
+- CTRL-007: Automated tests confirm that fictional account information is hidden when session access is denied.
+- **PLATFORM-002 — Partially verified (iOS simulator):** On October 30, 2026, screenshot capture was successfully performed on an iPhone 18 Pro Max simulator running iOS 27.0 while the synthetic session was ACTIVE. The resulting screenshot contained the masked fictional account identifier and synthetic balance. Screenshot prevention was not observed. Application-switcher preview behavior remains pending documented verification.
 
 **Residual Risk**
 
-A second camera or a compromised device can still capture displayed information.
+Privacy-aware masking reduces unnecessary exposure of fictional account identifiers but does not prevent screenshots, screen recordings, external photography, or observation of information intentionally displayed during an authorized session.
+
+Manual iOS simulator verification confirmed that screenshots can capture the masked account identifier and synthetic balance. No native screenshot-blocking mechanism has been implemented or verified. Application-switcher preview protection remains unverified, and results from an iOS simulator cannot be generalized to all physical devices or operating-system versions.
+
+No universal operating-system screen-capture protection is claimed.
 
 ### T-08 — Secure Storage Failure Mishandling
 
@@ -389,23 +401,29 @@ Real-world timing, scheduling, and application suspension behavior require devic
 
 **Threat**
 
-A simulated trusted-device indicator is mistaken for actual OS-backed device attestation and incorrectly permits protected access.
+A simulated trusted-device indicator may be mistaken for actual operating-system or hardware-backed device attestation, potentially leading to incorrect authentication or authorization decisions.
 
-**Planned Mitigations**
+**Implemented Mitigations — Issue #19**
 
-- Clearly label device trust signals as simulated.
-- Separate device context from authentication authority.
-- Prevent trust indicators from overriding session guards.
-- Document lack of hardware-backed verification.
+- Define an injectable device-context port with synthetic `TRUSTED`, `UNTRUSTED`, and `UNAVAILABLE` outcomes.
+- Default simulated device trust to `UNAVAILABLE`.
+- Clearly label the user interface with `SIMULATED — NOT DEVICE ATTESTATION`.
+- Keep device-context information separate from the session state machine and authentication authority.
+- Prevent simulated trust values from establishing identity, unlocking sessions, extending expiration, or overriding protected-content access restrictions.
+- Avoid collecting real device identifiers, performing device fingerprinting, or persisting simulated device trust.
 
 **Verification**
 
-- DEVICE-001: A trusted indicator cannot bypass `SIGNED_OUT`.
-- DEVICE-002: A trusted indicator cannot unlock `LOCKED` or `EXPIRED`.
+- DEVICE-001: Automated tests verify that simulated `TRUSTED` cannot bypass `SIGNED_OUT`.
+- DEVICE-002: Automated tests verify that simulated `TRUSTED` cannot unlock `LOCKED` or `EXPIRED`.
+- UI integration tests verify that background transitions keep protected content hidden regardless of simulated device trust.
+- Adapter tests verify the three supported synthetic outcomes and the default `UNAVAILABLE` behavior.
 
 **Residual Risk**
 
-No production device attestation is provided in V1.
+No production device attestation, hardware-backed trust verification, or real device identity validation is implemented. Simulated trust values are educational indicators only and provide no independent security assurance.
+
+Automated tests demonstrate separation of responsibilities but do not constitute native platform attestation verification or OWASP MASVS certification.
 
 ### T-11 — Inadequate Security Event Traceability
 

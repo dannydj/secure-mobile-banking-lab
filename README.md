@@ -10,7 +10,7 @@ SMBL is not a production banking application or a security-certified product.
 
 ## Project Status
 
-**Current phase: V1 native biometric reauthentication and secure storage integration**
+**Current phase: V1 privacy-aware rendering and simulated device context integration — Issue #19**
 
 The Expo and React Native application is operational in web development and has been built and functionally verified on an iOS simulator.
 
@@ -51,7 +51,14 @@ Completed foundations:
 - Safe handling of transient iOS inactive states without bypassing background session protection.
 - Fail-closed biometric behavior on web and unsupported platforms.
 - Native iOS simulator verification of successful Face ID reauthentication, non-matching attempts, and cancellation.
-- Local verification with 155 passing Jest tests across 18 suites.
+- Privacy-aware masking of fictional account identifiers using a pure, testable domain policy.
+- Protected synthetic account information displayed only when session authorization permits access.
+- Separation of Expo Router entry-point wiring, session screen coordination, authentication hooks, and presentation components.
+- Injectable simulated device context supporting `TRUSTED`, `UNTRUSTED`, and `UNAVAILABLE` outcomes.
+- Explicit device-context labeling: `SIMULATED — NOT DEVICE ATTESTATION`.
+- Non-authoritative device trust that cannot authenticate users, unlock sessions, extend expiration, or bypass access controls.
+- Automated negative authorization tests covering signed-out, locked, expired, and background states.
+- Local verification with 166 passing Jest tests across 20 suites.
 
 The GitHub Actions workflow was successfully verified on PR #4 and main. Subsequent implementation changes must pass CI on their respective pull requests.
 
@@ -115,13 +122,52 @@ Verified functionality includes:
 - Continued session locking after non-matching Face ID attempts and cancellation.
 - Safe handling of transient inactive states during native biometric prompts.
 
-**Automated verification:** 155 passing Jest tests across 18 suites.
+**Issue #19 — PLATFORM-002 observation:** On October 30, 2026, the application was manually tested on an iPhone 18 Pro Max simulator running iOS 27.0. Screenshot capture was successful during an ACTIVE session and included only the masked fictional account identifier (`••••••••6789`) and synthetic balance (`$0.00`). The application did not prevent screenshot capture. Application-switcher preview protection has not yet been documented.
+
+**Automated verification:** 166 passing Jest tests across 20 suites, including privacy-aware rendering and simulated device-context authorization regressions.
+
+**Verification scope:** The secure-storage and biometric observations listed above were collected during earlier implementation milestones. On October 30, 2026, the Issue #19 privacy-aware interface and default simulated device context were additionally observed on an iPhone 18 Pro Max simulator running iOS 27.0. Screenshot capture was successful and displayed the masked fictional account identifier and synthetic balance. Application-switcher preview behavior remains pending documented verification. Physical-device and Android verification remain pending.
 
 **Limitations:** The iOS simulator does not verify physical biometric sensors. Android and physical devices have not been functionally verified. Native biometric verification is not equivalent to initial identity verification, server authorization, or security certification.
 
 Native biometric testing on iOS requires a development build rather than Expo Go.
 
 See [Security Controls](docs/security-controls.md#36-native-biometric-reauthentication--issue-17) for detailed observations and limitations.
+
+### Privacy-Aware Rendering and Simulated Device Context — Issue #19
+
+SMBL V1 implements two additional educational security controls:
+
+**CTRL-007 — Privacy-Aware Rendering**
+
+Fictional financial account identifiers are masked before display. Protected synthetic account information is rendered only when the existing session authorization policy permits access. Locked, expired, signed-out, and backgrounded sessions cannot expose protected content through the application interface.
+
+**CTRL-010 — Simulated Device Context**
+
+An injectable device-context adapter provides synthetic `TRUSTED`, `UNTRUSTED`, and `UNAVAILABLE` states. These values are informational only and are explicitly labeled `SIMULATED — NOT DEVICE ATTESTATION`.
+
+Simulated device trust does not authenticate users, restore sessions, unlock protected content, extend session expiration, or override existing authorization policies.
+
+**Verification**
+
+Local automated verification completed on October 30, 2026:
+
+- 166 passing Jest tests across 20 suites.
+- TypeScript and ESLint validation passed.
+- Expo dependency compatibility check passed.
+- Negative authorization tests confirm that simulated device trust cannot bypass existing session restrictions.
+
+**Limitations**
+
+- All account identifiers and device-context values are synthetic.
+- No real device identification, fingerprinting, or hardware-backed attestation is performed.
+- **PLATFORM-002 — iOS screenshot observation:** On October 30, 2026, an iPhone 18 Pro Max simulator running iOS 27.0 successfully captured the application screen during an ACTIVE session. The screenshot displayed the masked fictional account identifier and synthetic balance. Screenshot capture was not blocked.
+- **Application-switcher preview:** The behavior of protected content in the iOS App Switcher remains pending documented verification.
+- **Security limitation:** Privacy-aware masking reduces unnecessary disclosure but does not prevent screenshots or recordings of information visible during an authorized session. No universal screenshot or application-preview protection is claimed.
+- Automated tests do not establish physical-device verification or production security assurance.
+- No complete OWASP MASVS compliance or independent security certification is claimed.
+
+See [Security Controls](docs/security-controls.md#37-privacy-aware-rendering-and-simulated-device-context--issue-19) and [Threat Model](docs/threat-model/threat-model.md) for implementation evidence, related threats, and residual risks.
 
 ## Problem Statement
 
@@ -205,7 +251,6 @@ The proposed V1 technology baseline includes:
 - Expo and Expo Router
 - Expo LocalAuthentication
 - Expo SecureStore
-- Expo ScreenCapture
 - React Native AppState
 - Jest and jest-expo
 - React Native Testing Library

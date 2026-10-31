@@ -1,0 +1,218 @@
+import { useEffect, useSyncExternalStore } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
+import { LoginForm } from '../../components/auth/LoginForm'
+import { DeviceContextStatus } from '../../components/device-context/DeviceContextStatus'
+import { ProtectedAccountPreview } from '../../components/privacy/ProtectedAccountPreview'
+import { SessionActions } from '../../components/session/SessionActions'
+import { PreferenceControls } from '../../components/storage/PreferenceControls'
+import { canAccessSession } from '../../domain/session/session-machine'
+import { useBiometricReauthentication } from '../../hooks/useBiometricReauthentication'
+import { useLoginFlow } from '../../hooks/useLoginFlow'
+import { useSyntheticPreference } from '../../hooks/useSyntheticPreference'
+import { createSimulatedDeviceContextAdapter } from '../../infrastructure/device-context/simulated-device-context-adapter'
+import { observeAppState, type AppStateEventSource } from '../../infrastructure/session/app-state-adapter'
+import { observeSessionDeadlines } from '../../infrastructure/session/session-deadline-adapter'
+import type { BiometricAuthenticationPort } from '../../use-cases/biometrics/biometric.types'
+import type { DeviceContextPort } from '../../use-cases/device-context/device-context.types'
+import type { IdentityAdapter } from '../../use-cases/identity/identity.types'
+import { type Clock, type SessionCoordinator } from '../../use-cases/session/session-coordinator'
+import type { ProtectedStoragePort } from '../../use-cases/storage/storage.types'
+
+type SessionDemoProps = {
+  coordinator: SessionCoordinator
+  clock: Clock
+  appStateSource?: AppStateEventSource
+  identityAdapter?: IdentityAdapter
+  storageAdapter?: ProtectedStoragePort
+  biometricAdapter?: BiometricAuthenticationPort
+  deviceContextAdapter?: DeviceContextPort
+}
+
+const defaultDeviceContextAdapter = createSimulatedDeviceContextAdapter()
+
+export function SessionDemo({ coordinator, clock, appStateSource, identityAdapter, storageAdapter, biometricAdapter, deviceContextAdapter }: SessionDemoProps) {
+  const deviceTrust = (deviceContextAdapter ?? defaultDeviceContextAdapter).readTrust()
+  const { restorationResult, isUpdatingPreference, preferenceFeedback, updatePreference } = useSyntheticPreference({
+    coordinator,
+    clock,
+    storageAdapter,
+  })
+
+  const { username, setUsername, accessCode, setAccessCode, loginFeedback, isAuthenticating, handleLogin } = useLoginFlow({
+    coordinator,
+    identityAdapter,
+  })
+
+  const { isReauthenticating, biometricFeedback, handleBiometricUnlock, cancelBiometricUnlock } = useBiometricReauthentication({
+    coordinator,
+    biometricAdapter,
+  })
+
+  const machine = useSyncExternalStore(coordinator.subscribe, coordinator.getSnapshot, coordinator.getSnapshot)
+
+  useEffect(() => {
+    const stopAppState = observeAppState(coordinator, appStateSource)
+
+    const stopDeadlines = observeSessionDeadlines(coordinator, clock)
+
+    return () => {
+      stopDeadlines()
+      stopAppState()
+    }
+  }, [coordinator, clock, appStateSource])
+
+  const canViewProtected = restorationResult !== null && canAccessSession(machine, clock.now())
+
+  const isSignedOut = machine.sessionState.status === 'SIGNED_OUT' || machine.sessionState.status === 'EXPIRED'
+
+  const handleLogout = (): void => {
+    cancelBiometricUnlock()
+    coordinator.dispatch({ type: 'LOGOUT' })
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Secure Mobile Banking Lab</Text>
+
+      <Text style={styles.subtitle}>Mobile Security Reference Project</Text>
+
+      <Text style={styles.description}>Simulated session lifecycle and protected access.</Text>
+
+      <Text style={styles.status}>Session status: {machine.sessionState.status}</Text>
+
+      <Text style={styles.status}>Foreground: {machine.isForeground ? 'yes' : 'no'}</Text>
+
+      <DeviceContextStatus trust={deviceTrust} />
+
+      <Text style={styles.status}>
+        Synthetic preference: {restorationResult === null ? 'loading' : restorationResult.status === 'FOUND' ? restorationResult.value : 'unavailable'}
+      </Text>
+
+      <PreferenceControls
+        disabled={!machine.isForeground || restorationResult === null || isUpdatingPreference}
+        feedback={preferenceFeedback}
+        onSaveSessions={() => {
+          void updatePreference({
+            type: 'SAVE',
+            value: 'sessions',
+          })
+        }}
+        onSaveStorage={() => {
+          void updatePreference({
+            type: 'SAVE',
+            value: 'storage',
+          })
+        }}
+        onClear={() => {
+          void updatePreference({ type: 'CLEAR' })
+        }}
+      />
+
+      {canViewProtected ? <ProtectedAccountPreview accountIdentifier="000123456789" balance="$0.00" /> : <Text style={styles.restricted}>Protected content hidden</Text>}
+
+      <View style={styles.actions}>
+        {isSignedOut ? (
+          <LoginForm
+            username={username}
+            accessCode={accessCode}
+            disabled={!machine.isForeground || isAuthenticating || restorationResult === null}
+            feedback={loginFeedback}
+            onUsernameChange={setUsername}
+            onAccessCodeChange={setAccessCode}
+            onLogin={() => {
+              void handleLogin()
+            }}
+          />
+        ) : (
+          <SessionActions
+            canViewProtected={canViewProtected}
+            isLocked={machine.sessionState.status === 'LOCKED'}
+            biometricDisabled={!machine.isForeground || isReauthenticating || restorationResult === null}
+            biometricFeedback={biometricFeedback}
+            onActivity={() => {
+              coordinator.dispatch({ type: 'USER_ACTIVITY' })
+            }}
+            onLock={() => {
+              coordinator.dispatch({ type: 'LOCK_REQUESTED' })
+            }}
+            onBiometricUnlock={() => {
+              void handleBiometricUnlock()
+            }}
+            onLogout={handleLogout}
+          />
+        )}
+      </View>
+
+      <Text style={styles.disclaimer}>Educational demonstration using synthetic data only.</Text>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#F8FAFC',
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: '#0F172A',
+  },
+  subtitle: {
+    fontSize: 16,
+    marginTop: 12,
+    color: '#334155',
+  },
+  description: {
+    fontSize: 14,
+    marginTop: 24,
+    textAlign: 'center',
+    color: '#475569',
+  },
+  status: {
+    fontSize: 14,
+    marginTop: 12,
+    color: '#334155',
+  },
+  restricted: {
+    marginTop: 24,
+    color: '#475569',
+  },
+  actions: {
+    marginTop: 24,
+    gap: 12,
+    width: '100%',
+  },
+  disclaimer: {
+    fontSize: 12,
+    marginTop: 24,
+    textAlign: 'center',
+    color: '#64748B',
+  },
+  loginForm: {
+    width: '100%',
+    gap: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#FFFFFF',
+    color: '#0F172A',
+  },
+  demoHint: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  loginFeedback: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+  },
+})
