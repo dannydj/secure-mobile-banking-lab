@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { LoginForm } from '../../components/auth/LoginForm'
+import { DeviceContextStatus } from '../../components/device-context/DeviceContextStatus'
 import { ProtectedAccountPreview } from '../../components/privacy/ProtectedAccountPreview'
 import { SessionActions } from '../../components/session/SessionActions'
 import { PreferenceControls } from '../../components/storage/PreferenceControls'
@@ -8,9 +9,11 @@ import { canAccessSession } from '../../domain/session/session-machine'
 import { useBiometricReauthentication } from '../../hooks/useBiometricReauthentication'
 import { useLoginFlow } from '../../hooks/useLoginFlow'
 import { useSyntheticPreference } from '../../hooks/useSyntheticPreference'
+import { createSimulatedDeviceContextAdapter } from '../../infrastructure/device-context/simulated-device-context-adapter'
 import { observeAppState, type AppStateEventSource } from '../../infrastructure/session/app-state-adapter'
 import { observeSessionDeadlines } from '../../infrastructure/session/session-deadline-adapter'
 import type { BiometricAuthenticationPort } from '../../use-cases/biometrics/biometric.types'
+import type { DeviceContextPort } from '../../use-cases/device-context/device-context.types'
 import type { IdentityAdapter } from '../../use-cases/identity/identity.types'
 import { type Clock, type SessionCoordinator } from '../../use-cases/session/session-coordinator'
 import type { ProtectedStoragePort } from '../../use-cases/storage/storage.types'
@@ -22,9 +25,13 @@ type SessionDemoProps = {
   identityAdapter?: IdentityAdapter
   storageAdapter?: ProtectedStoragePort
   biometricAdapter?: BiometricAuthenticationPort
+  deviceContextAdapter?: DeviceContextPort
 }
 
-export function SessionDemo({ coordinator, clock, appStateSource, identityAdapter, storageAdapter, biometricAdapter }: SessionDemoProps) {
+const defaultDeviceContextAdapter = createSimulatedDeviceContextAdapter()
+
+export function SessionDemo({ coordinator, clock, appStateSource, identityAdapter, storageAdapter, biometricAdapter, deviceContextAdapter }: SessionDemoProps) {
+  const deviceTrust = (deviceContextAdapter ?? defaultDeviceContextAdapter).readTrust()
   const { restorationResult, isUpdatingPreference, preferenceFeedback, updatePreference } = useSyntheticPreference({
     coordinator,
     clock,
@@ -74,6 +81,8 @@ export function SessionDemo({ coordinator, clock, appStateSource, identityAdapte
       <Text style={styles.status}>Session status: {machine.sessionState.status}</Text>
 
       <Text style={styles.status}>Foreground: {machine.isForeground ? 'yes' : 'no'}</Text>
+
+      <DeviceContextStatus trust={deviceTrust} />
 
       <Text style={styles.status}>
         Synthetic preference: {restorationResult === null ? 'loading' : restorationResult.status === 'FOUND' ? restorationResult.value : 'unavailable'}
