@@ -1,7 +1,7 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { AppStateStatus } from 'react-native';
-import { SessionDemo } from '../../src/app/index';
 import { INACTIVITY_TIMEOUT_MS } from '../../src/domain/session/session-policy';
+import { SessionDemo } from '../../src/features/session/SessionDemo';
 import { createInMemoryStorageAdapter } from '../../src/infrastructure/storage/in-memory-storage-adapter';
 import type { BiometricAuthenticationResult } from '../../src/use-cases/biometrics/biometric.types';
 import type { IdentityAdapter, IdentityResult } from '../../src/use-cases/identity/identity.types';
