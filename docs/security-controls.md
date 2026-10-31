@@ -40,10 +40,10 @@ All V1 controls were initially classified as `PLANNED`. Their status is updated 
 | CTRL-004 | Stale biometric result rejection | T-04 | MASVS-AUTH | SIMULATED |
 | CTRL-005 | Safe session restoration and metadata validation | T-05 | MASVS-AUTH, MASVS-STORAGE | SIMULATED |
 | CTRL-006 | Background locking and content obscuring | T-06 | MASVS-AUTH, MASVS-PLATFORM | SIMULATED |
-| CTRL-007 | Privacy-aware display and screen protection | T-07 | MASVS-PLATFORM, MASVS-PRIVACY | PLANNED |
+| CTRL-007 | Privacy-aware rendering (screen protection pending) | T-07 | MASVS-PLATFORM, MASVS-PRIVACY | SIMULATED |
 | CTRL-008 | Protected storage and error handling | T-08 | MASVS-STORAGE | IMPLEMENTED |
 | CTRL-009 | Deterministic inactivity and lifecycle policy | T-09 | MASVS-AUTH | SIMULATED |
-| CTRL-010 | Isolation of simulated device trust signals | T-10 | MASVS-AUTH | PLANNED |
+| CTRL-010 | Isolation of simulated device trust signals | T-10 | MASVS-AUTH | SIMULATED |
 | CTRL-011 | Minimal security event recording | T-11 | MASVS-STORAGE | PLANNED |
 | CTRL-012 | Safe biometric failures and recovery | T-12 | MASVS-AUTH | IMPLEMENTED |
 | CTRL-013 | Synthetic data and repository hygiene | T-13 | MASVS-STORAGE, MASVS-PRIVACY | PLANNED |
@@ -416,6 +416,54 @@ React Native to 0.88.1, the iOS native project was regenerated.
 - Verification environment: iPhone 18 Pro Max simulator, iOS 27.0.
 
 Physical-device and Android verification remain pending.
+
+### 3.7 Privacy-Aware Rendering and Simulated Device Context — Issue #19
+
+**Verification date:** 2026-10-30
+
+**Implemented controls:**
+
+- CTRL-007 / T-07: Fictional financial account identifiers are masked before rendering.
+- CTRL-010 / T-10: Simulated device trust is explicitly non-authoritative.
+
+**Implementation:**
+
+- `src/domain/privacy/mask-account-identifier.ts`
+- `src/components/privacy/ProtectedAccountPreview.tsx`
+- `src/components/device-context/DeviceContextStatus.tsx`
+- `src/infrastructure/device-context/simulated-device-context-adapter.ts`
+- `src/use-cases/device-context/device-context.types.ts`
+
+**Automated verification:**
+
+- 166 passing Jest tests across 20 suites.
+- TypeScript and ESLint checks passed.
+- UI-003: Fictional account identifiers are masked and protected content is hidden when session access is denied.
+- DEVICE-001: Simulated TRUSTED cannot bypass SIGNED_OUT.
+- DEVICE-002: Simulated TRUSTED cannot unlock LOCKED or EXPIRED.
+- Background transitions keep protected content hidden regardless of simulated device trust.
+
+**Limitations:**
+
+- Device trust values are synthetic, not hardware-backed attestation.
+- No real device identifiers or device fingerprinting are collected.
+- Simulated device trust never establishes identity, authorizes access, or extends session expiration.
+- Automated UI tests are not native device verification.
+- No complete OWASP MASVS compliance or security certification is claimed.
+
+CTRL-007 and CTRL-010 are classified as SIMULATED.
+
+**iOS Simulator Verification — October 30, 2026**
+
+- Platform: iPhone 18 Pro Max simulator.
+- The ACTIVE session displayed the fictional account identifier with only its last four digits visible.
+- The simulated device context displayed `UNAVAILABLE` and `SIMULATED — NOT DEVICE ATTESTATION`.
+- The iOS Simulator screenshot command successfully captured the application while the session was ACTIVE.
+- The captured image contained the masked fictional account and synthetic balance.
+- No screenshot prevention was observed or claimed.
+- Additional manual checks were reported as successful for protected-content visibility restrictions in non-authorized session states. These checks are supported by automated integration tests; separate native screenshots for those states have not been retained as evidence.
+
+**Limitations:** Screenshot capture remains possible. Masking reduces exposure of fictional account identifiers but does not prevent capture of information intentionally visible during an authorized session. These observations were made on an iOS simulator, not a physical device.
 
 ## 4. Authentication and Session Controls
 
